@@ -1,0 +1,19 @@
+# --- Base DUSt3R Requirements ---
+roma
+gradio
+matplotlib
+tqdm
+opencv-python
+scipy
+einops
+trimesh
+tensorboard
+pyglet<2
+huggingface-hub[torch]>=0.22
+
+# --- Custom Pipeline Additions ---
+open3d
+laspy
+rosbags
+pymeshlab
+Pillow

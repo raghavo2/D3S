@@ -1,0 +1,21 @@
+# Ignore deep learning weights
+checkpoints/
+*.pth
+
+# Ignore large datasets and telemetry
+AGZ_subset/
+*.bag
+*.npz
+
+# Ignore heavy 3D outputs and binaries
+drone_deliverables/
+colmap_output/
+colmap-x64-windows-cuda/
+*.ply
+*.obj
+*.glb
+*.las
+*.fbx
+
+# Python caches
+__pycache__/
