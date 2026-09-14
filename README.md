@@ -16,6 +16,11 @@ pip install -r requirements.txt
 ```
 
 ## Execution Pipeline
+**0. Video Ingestion**
+Extracts perfectly spaced image frames from a raw drone video and prepares them for reconstruction.
+```bash
+python extract_frames.py path/to/your/video.mp4 --fps 2
+```
 
 **1. Extract Metadata**
 Parses the drone image EXIF tags and flight `.bag` files for trajectory mapping.
