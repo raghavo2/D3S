@@ -259,7 +259,7 @@
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.015);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   transition: all var(--transition-fast);
 }
 
@@ -410,7 +410,7 @@
   padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.45);
   font-size: 0.78rem;
   font-weight: 600;
@@ -448,7 +448,7 @@
 
 .format-tabs {
   display: flex;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .format-tab {
@@ -498,7 +498,7 @@
   background: rgba(255, 255, 255, 0.04);
   padding: 1px 7px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
 
@@ -513,7 +513,7 @@
   font-size: 0.68rem;
   line-height: 1.5;
   background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-md);
   overflow-x: auto;

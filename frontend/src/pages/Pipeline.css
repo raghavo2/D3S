@@ -95,7 +95,7 @@
 /* ─── Stage Stepper (Compact) ─── */
 .stepper {
   background: var(--glass-bg);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
 }
@@ -145,7 +145,7 @@
   font-size: 0.72rem;
   flex-shrink: 0;
   background: var(--bg-surface);
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
   transition: all var(--transition-base);
 }
 
@@ -213,14 +213,14 @@
    Collapsible Sections
    ═══════════════════════════════════════ */
 .collapsible {
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--glass-bg);
 }
 
 .collapsible.open {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .collapsible-header {
@@ -324,7 +324,7 @@
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
   background: var(--bg-elevated);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
 
@@ -367,7 +367,7 @@
 .log-filter-btn {
   font-size: 0.62rem;
   padding: 2px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-sm);
   background: none;
   color: rgba(255, 255, 255, 0.4);

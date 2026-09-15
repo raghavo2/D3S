@@ -42,7 +42,7 @@
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.54);
   margin-bottom: var(--space-lg);
 }
 
@@ -63,7 +63,7 @@
 
 .hero-subtitle {
   font-size: 1.05rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.54);
   line-height: 1.7;
   margin-bottom: var(--space-2xl);
   max-width: 440px;
@@ -125,7 +125,7 @@
 /* ─── Stats Panel ─── */
 .stats-panel {
   background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
   backdrop-filter: blur(20px);
@@ -154,7 +154,7 @@
 
 .stat-label {
   font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.54);
   font-weight: 500;
   letter-spacing: 0.02em;
 }
@@ -176,7 +176,7 @@
   align-items: center;
   gap: 10px;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.54);
   font-weight: 400;
 }
 
@@ -208,7 +208,7 @@
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.54);
   margin-bottom: var(--space-sm);
 }
 
@@ -229,15 +229,15 @@
 .feature-card {
   padding: var(--space-xl) var(--space-xl);
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
   transition: all var(--transition-base);
   cursor: default;
 }
 
 .feature-card:hover {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
   transform: translateY(-2px);
 }
 
@@ -245,7 +245,7 @@
   font-family: 'Outfit', 'Inter', sans-serif;
   font-size: 2.4rem;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.54);
   line-height: 1;
   margin-bottom: var(--space-md);
   letter-spacing: -0.04em;
@@ -262,7 +262,7 @@
 
 .feature-text {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.54);
   line-height: 1.65;
   font-weight: 400;
 }
@@ -293,13 +293,13 @@
   font-family: 'Outfit', 'Inter', sans-serif;
   font-size: 0.65rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.54);
   width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -307,7 +307,7 @@
 .pipeline-label {
   font-size: 0.82rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.54);
   white-space: nowrap;
 }
 
@@ -324,8 +324,8 @@
 .landing-footer {
   padding: var(--space-xl) 0;
   text-align: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.54);
   font-size: 0.75rem;
   font-weight: 400;
   letter-spacing: 0.01em;

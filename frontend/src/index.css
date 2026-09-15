@@ -18,8 +18,8 @@
   /* Glass */
   --glass-bg: rgba(255, 255, 255, 0.025);
   --glass-bg-hover: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --glass-border-hover: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-hover: rgba(255, 255, 255, 0.2);
 
   /* Primary — monochrome white */
   --primary-start: #ffffff;
