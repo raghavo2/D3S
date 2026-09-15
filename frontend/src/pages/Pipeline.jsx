@@ -7,6 +7,22 @@ import FlightMap from '../components/FlightMap';
 import FrameGallery from '../components/FrameGallery';
 import './Pipeline.css';
 
+function CollapsibleSection({ title, defaultOpen = false, badge, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`collapsible ${open ? 'open' : ''}`}>
+      <button className="collapsible-header" onClick={() => setOpen(!open)}>
+        <span className="collapsible-title">{title}</span>
+        <div className="collapsible-right">
+          {badge && <span className="collapsible-badge">{badge}</span>}
+          <span className="collapsible-arrow">{open ? '−' : '+'}</span>
+        </div>
+      </button>
+      {open && <div className="collapsible-body">{children}</div>}
+    </div>
+  );
+}
+
 export default function Pipeline() {
   const { jobId } = useParams();
   const navigate = useNavigate();
@@ -23,7 +39,7 @@ export default function Pipeline() {
   const [demoSaving, setDemoSaving] = useState(false);
   const [gpsData, setGpsData] = useState(null);
   const [frames, setFrames] = useState({ frames: [], base_url: '' });
-  const [logFilter, setLogFilter] = useState('all'); // 'all' | 'errors' | 'stages'
+  const [logFilter, setLogFilter] = useState('all');
   const [startTime] = useState(Date.now());
   const [elapsed, setElapsed] = useState(0);
   const logEndRef = useRef(null);
@@ -127,7 +143,6 @@ export default function Pipeline() {
 
   const getStageStatus = (stageId) => {
     if (stages[stageId]) return stages[stageId].status;
-    // Determine pending based on stage order
     const currentIndex = PIPELINE_STAGES.findIndex(s => s.id === currentStage);
     const stageIndex = PIPELINE_STAGES.findIndex(s => s.id === stageId);
     return stageIndex > currentIndex ? 'pending' : 'pending';
@@ -140,13 +155,18 @@ export default function Pipeline() {
     return 'log-line';
   };
 
+  const completedCount = PIPELINE_STAGES.filter(s => getStageStatus(s.id) === 'complete').length;
+
   return (
     <div className="pipeline-page page">
-      <div className="pipeline-layout animate-fade-in">
+      <div className="pipeline-container animate-fade-in">
 
         {/* Header */}
         <div className="pipeline-header">
-          <h1 className="gradient-text">Pipeline Monitor</h1>
+          <div className="pipeline-header-left">
+            <h1 className="gradient-text">Pipeline Monitor</h1>
+            <span className="pipeline-job-id">{jobId?.slice(0, 8)}</span>
+          </div>
           <span className={`badge ${
             pipelineStatus === 'complete' ? 'badge-success' :
             pipelineStatus === 'failed' || pipelineStatus === 'interrupted' ? 'badge-error' :
@@ -155,180 +175,189 @@ export default function Pipeline() {
           }`}>
             {pipelineStatus === 'complete' ? '✓ Complete' :
              pipelineStatus === 'failed' ? '✗ Failed' :
-             pipelineStatus === 'interrupted' ? '⚡ Interrupted' :
-             pipelineStatus === 'uploaded' ? '📤 Uploaded' :
+             pipelineStatus === 'interrupted' ? 'Interrupted' :
+             pipelineStatus === 'uploaded' ? 'Uploaded' :
              '⟳ Running'}
           </span>
         </div>
 
-        {/* Stepper */}
-        <div className="stepper">
-          <ul className="stepper-list">
-            {PIPELINE_STAGES.map((stage) => {
-              const status = getStageStatus(stage.id);
-              return (
-                <li key={stage.id} className={`stepper-item ${status}`}>
-                  <div className="stepper-icon">
-                    {status === 'complete' ? '✓' :
-                     status === 'running' ? <span className="spinner" style={{ width: 16, height: 16 }} /> :
-                     status === 'error' ? '✗' :
-                     status === 'warning' ? '⚠' :
-                     stage.icon}
-                  </div>
-                  <div className="stepper-info">
-                    <div className="stepper-label">{stage.label}</div>
-                    <div className="stepper-desc">{stage.description}</div>
-                    {status !== 'pending' && (
-                      <div className="stepper-status-text">{status}</div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        {/* Right Panel */}
-        <div className="pipeline-panel">
-
-          {/* Completion Banner */}
-          {pipelineStatus === 'complete' && (
-            <div className="complete-banner animate-slide-up">
-              <h3>🎉 Reconstruction Complete!</h3>
-              <p>Your 3D model is ready for interactive viewing.</p>
-              <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <Link to={`/viewer?job=${jobId}`} className="btn btn-primary">
-                  Open 3D Viewer →
-                </Link>
-                {!demoSaved ? (
-                  <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      placeholder="Demo name (optional)"
-                      value={demoName}
-                      onChange={(e) => setDemoName(e.target.value)}
-                      style={{
-                        padding: '10px 14px',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--glass-border)',
-                        background: 'var(--glass-bg)',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.85rem',
-                        fontFamily: 'var(--font-sans)',
-                        width: '180px',
-                      }}
-                    />
-                    <button
-                      className="btn btn-secondary"
-                      disabled={demoSaving}
-                      onClick={async () => {
-                        setDemoSaving(true);
-                        try {
-                          await saveJobAsDemo(jobId, demoName || null);
-                          setDemoSaved(true);
-                        } catch { setDemoSaving(false); }
-                      }}
-                    >
-                      {demoSaving ? 'Saving…' : '⭐ Save to Demos'}
-                    </button>
-                  </div>
-                ) : (
-                  <span className="badge badge-success" style={{ padding: '10px 16px', fontSize: '0.82rem' }}>
-                    ✓ Saved to Demo Gallery
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Metadata Panel */}
-          {metadata?.gps && metadata.gps.length > 0 && (
-            <div className="metadata-panel glass">
-              <h3 className="metadata-title">📡 Extracted Metadata</h3>
-              <div className="metadata-grid">
-                <div className="metadata-item">
-                  <span className="metadata-label">GPS Points</span>
-                  <span className="metadata-value">{metadata.gps.length}</span>
-                </div>
-                <div className="metadata-item">
-                  <span className="metadata-label">Latitude Range</span>
-                  <span className="metadata-value">
-                    {Math.min(...metadata.gps.map(g => g.latitude)).toFixed(4)}° — {Math.max(...metadata.gps.map(g => g.latitude)).toFixed(4)}°
-                  </span>
-                </div>
-                <div className="metadata-item">
-                  <span className="metadata-label">Longitude Range</span>
-                  <span className="metadata-value">
-                    {Math.min(...metadata.gps.map(g => g.longitude)).toFixed(4)}° — {Math.max(...metadata.gps.map(g => g.longitude)).toFixed(4)}°
-                  </span>
-                </div>
-                <div className="metadata-item">
-                  <span className="metadata-label">Altitude Range</span>
-                  <span className="metadata-value">
-                    {Math.min(...metadata.gps.map(g => g.altitude)).toFixed(1)}m — {Math.max(...metadata.gps.map(g => g.altitude)).toFixed(1)}m
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Flight Path Map */}
-          {gpsData && (
-            <FlightMap gpsData={gpsData} />
-          )}
-
-          {/* Frame Gallery */}
-          {frames.frames.length > 0 && (
-            <FrameGallery
-              jobId={jobId}
-              frames={frames.frames}
-              baseUrl={frames.base_url}
-            />
-          )}
-
-          {/* Log Terminal */}
-          <div className="log-terminal glass">
-            <div className="log-header">
-              <div className="log-header-title">
-                <span className={`log-header-dot ${isConnected ? 'connected' : 'disconnected'}`} />
-                Live Output
-                {pipelineStatus === 'running' && (
-                  <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', marginLeft: 8, fontFamily: 'var(--font-mono)' }}>
-                    ⏱ {formatElapsed(elapsed)}
-                  </span>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                {['all', 'errors', 'stages'].map(f => (
+        {/* Completion Banner */}
+        {pipelineStatus === 'complete' && (
+          <div className="complete-banner animate-slide-up">
+            <h3>Reconstruction Complete</h3>
+            <p>Your 3D model is ready for interactive viewing.</p>
+            <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Link to={`/viewer?job=${jobId}`} className="btn btn-primary">
+                Open 3D Viewer →
+              </Link>
+              {!demoSaved ? (
+                <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    placeholder="Demo name (optional)"
+                    value={demoName}
+                    onChange={(e) => setDemoName(e.target.value)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--glass-border)',
+                      background: 'var(--glass-bg)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                      fontFamily: 'var(--font-sans)',
+                      width: '180px',
+                    }}
+                  />
                   <button
-                    key={f}
-                    className={`btn btn-ghost ${logFilter === f ? 'active' : ''}`}
-                    style={{ fontSize: '0.65rem', padding: '2px 8px' }}
-                    onClick={() => setLogFilter(f)}
+                    className="btn btn-secondary"
+                    disabled={demoSaving}
+                    onClick={async () => {
+                      setDemoSaving(true);
+                      try {
+                        await saveJobAsDemo(jobId, demoName || null);
+                        setDemoSaved(true);
+                      } catch { setDemoSaving(false); }
+                    }}
                   >
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                    {demoSaving ? 'Saving…' : 'Save to Demos'}
                   </button>
-                ))}
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 8 }}>
-                  {filteredLogs.length} lines
+                </div>
+              ) : (
+                <span className="badge badge-success" style={{ padding: '10px 16px', fontSize: '0.82rem' }}>
+                  ✓ Saved to Demo Gallery
                 </span>
-              </div>
-            </div>
-            <div className="log-body">
-              {filteredLogs.length === 0 && (
-                <div className="log-line" style={{ color: 'var(--text-muted)' }}>
-                  {logFilter === 'all' ? 'Waiting for pipeline output…' : `No ${logFilter} to show`}
-                </div>
               )}
-              {filteredLogs.map((line, i) => (
-                <div key={i} className={getLogLineClass(line)}>
-                  {line.stage && <span style={{ color: 'var(--text-muted)' }}>[{line.stage}] </span>}
-                  {line.text}
-                </div>
-              ))}
-              <div ref={logEndRef} />
             </div>
           </div>
+        )}
+
+        {/* Main content: left sidebar + right terminal */}
+        <div className="pipeline-columns">
+
+          {/* ─── Left: Stages + Collapsible Panels ─── */}
+          <div className="pipeline-sidebar">
+
+            {/* Compact Stepper */}
+            <div className="stepper">
+              <div className="stepper-progress-bar">
+                <div className="stepper-progress-fill" style={{ width: `${(completedCount / PIPELINE_STAGES.length) * 100}%` }} />
+              </div>
+              <ul className="stepper-list">
+                {PIPELINE_STAGES.map((stage) => {
+                  const status = getStageStatus(stage.id);
+                  return (
+                    <li key={stage.id} className={`stepper-item ${status}`}>
+                      <div className="stepper-icon">
+                        {status === 'complete' ? '✓' :
+                         status === 'running' ? <span className="spinner" style={{ width: 14, height: 14 }} /> :
+                         status === 'error' ? '✗' :
+                         status === 'warning' ? '!' :
+                         stage.icon}
+                      </div>
+                      <div className="stepper-info">
+                        <div className="stepper-label">{stage.label}</div>
+                        {status !== 'pending' && (
+                          <div className="stepper-status-text">{status}</div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {/* Collapsible: Metadata */}
+            {metadata?.gps && metadata.gps.length > 0 && (
+              <CollapsibleSection title="Extracted Metadata" badge={`${metadata.gps.length} pts`}>
+                <div className="metadata-grid">
+                  <div className="metadata-item">
+                    <span className="metadata-label">GPS Points</span>
+                    <span className="metadata-value">{metadata.gps.length}</span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">Lat Range</span>
+                    <span className="metadata-value">
+                      {Math.min(...metadata.gps.map(g => g.latitude)).toFixed(4)}° — {Math.max(...metadata.gps.map(g => g.latitude)).toFixed(4)}°
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">Lon Range</span>
+                    <span className="metadata-value">
+                      {Math.min(...metadata.gps.map(g => g.longitude)).toFixed(4)}° — {Math.max(...metadata.gps.map(g => g.longitude)).toFixed(4)}°
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">Alt Range</span>
+                    <span className="metadata-value">
+                      {Math.min(...metadata.gps.map(g => g.altitude)).toFixed(1)}m — {Math.max(...metadata.gps.map(g => g.altitude)).toFixed(1)}m
+                    </span>
+                  </div>
+                </div>
+              </CollapsibleSection>
+            )}
+
+            {/* Collapsible: Flight Map */}
+            {gpsData && (
+              <CollapsibleSection title="Flight Path Map" badge={`${gpsData.points?.length || 0} pts`}>
+                <div className="map-container">
+                  <FlightMap gpsData={gpsData} />
+                </div>
+              </CollapsibleSection>
+            )}
+
+            {/* Collapsible: Frame Gallery */}
+            {frames.frames.length > 0 && (
+              <CollapsibleSection title="Extracted Frames" badge={`${frames.frames.length} frames`}>
+                <FrameGallery
+                  jobId={jobId}
+                  frames={frames.frames}
+                  baseUrl={frames.base_url}
+                />
+              </CollapsibleSection>
+            )}
+          </div>
+
+          {/* ─── Right: Terminal ─── */}
+          <div className="pipeline-terminal-col">
+            <div className="log-terminal glass">
+              <div className="log-header">
+                <div className="log-header-title">
+                  <span className={`log-header-dot ${isConnected ? 'connected' : 'disconnected'}`} />
+                  Live Output
+                  {pipelineStatus === 'running' && (
+                    <span className="log-elapsed">{formatElapsed(elapsed)}</span>
+                  )}
+                </div>
+                <div className="log-filters">
+                  {['all', 'errors', 'stages'].map(f => (
+                    <button
+                      key={f}
+                      className={`log-filter-btn ${logFilter === f ? 'active' : ''}`}
+                      onClick={() => setLogFilter(f)}
+                    >
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                  <span className="log-count">{filteredLogs.length} lines</span>
+                </div>
+              </div>
+              <div className="log-body">
+                {filteredLogs.length === 0 && (
+                  <div className="log-line" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    {logFilter === 'all' ? 'Waiting for pipeline output…' : `No ${logFilter} to show`}
+                  </div>
+                )}
+                {filteredLogs.map((line, i) => (
+                  <div key={i} className={getLogLineClass(line)}>
+                    {line.stage && <span className="log-stage-tag">[{line.stage}] </span>}
+                    {line.text}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

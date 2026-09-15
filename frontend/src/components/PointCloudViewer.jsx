@@ -32,6 +32,9 @@ function PointCloud({ url, pointSize = 0.02 }) {
         box.getCenter(center);
         geo.translate(-center.x, -center.y, -center.z);
 
+        // Rotate from Z-up (reconstruction) to Y-up (Three.js)
+        geo.rotateX(-Math.PI / 2);
+
         const size = new THREE.Vector3();
         box.getSize(size);
         const maxDim = Math.max(size.x, size.y, size.z);

@@ -173,15 +173,24 @@ MAX_UPLOAD_BYTES = 1024 * 1024 * 1024  # 1 GB
 async def upload_video(
     file: UploadFile = File(...),
     fps: float = Form(default=2.0),
+    gps_file: Optional[UploadFile] = File(default=None),
+    flight_data_file: Optional[UploadFile] = File(default=None),
+    telemetry_file: Optional[UploadFile] = File(default=None),
 ):
-    """Upload a video file and create a new reconstruction job."""
+    """Upload a video file and create a new reconstruction job.
+    
+    Optionally attach GPS JSON, flight data CSV, or telemetry/SRT files
+    to provide geospatial data for the reconstruction pipeline.
+    """
     # Validate file type
     if not file.filename.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
         raise HTTPException(400, "Unsupported file type. Use MP4, AVI, MOV, or MKV.")
 
     job_id = str(uuid.uuid4())
     job_dir = os.path.join(JOBS_DIR, job_id)
+    metadata_dir = os.path.join(job_dir, "metadata")
     os.makedirs(job_dir, exist_ok=True)
+    os.makedirs(metadata_dir, exist_ok=True)
 
     # Save uploaded video
     video_path = os.path.join(job_dir, "video.mp4")
@@ -196,6 +205,105 @@ async def upload_video(
                 raise HTTPException(413, f"File exceeds {MAX_UPLOAD_BYTES // (1024*1024)}MB limit.")
             f.write(chunk)
 
+    # --- Save optional flight data files ---
+    attached_files = []
+
+    # GPS JSON / GeoJSON
+    if gps_file and gps_file.filename:
+        gps_data = await gps_file.read()
+        gps_save_name = gps_file.filename
+        gps_save_path = os.path.join(metadata_dir, gps_save_name)
+        with open(gps_save_path, "wb") as f:
+            f.write(gps_data)
+        attached_files.append({"type": "gps", "filename": gps_save_name})
+        # Also parse and save as gps.json if it's valid JSON
+        try:
+            parsed = json.loads(gps_data)
+            # If it's a list of coordinate dicts, save as gps.json
+            if isinstance(parsed, list):
+                with open(os.path.join(metadata_dir, "gps.json"), "w") as f:
+                    json.dump(parsed, f, indent=2)
+            # If it's a GeoJSON FeatureCollection, extract coordinates
+            elif isinstance(parsed, dict) and parsed.get("type") == "FeatureCollection":
+                points = []
+                for feature in parsed.get("features", []):
+                    geom = feature.get("geometry", {})
+                    if geom.get("type") == "Point":
+                        coords = geom["coordinates"]
+                        points.append({
+                            "longitude": coords[0],
+                            "latitude": coords[1],
+                            "altitude": coords[2] if len(coords) > 2 else 0,
+                        })
+                if points:
+                    with open(os.path.join(metadata_dir, "gps.json"), "w") as f:
+                        json.dump(points, f, indent=2)
+        except (json.JSONDecodeError, Exception):
+            pass  # Keep the raw file, pipeline will handle it
+
+    # Flight data CSV
+    if flight_data_file and flight_data_file.filename:
+        csv_data = await flight_data_file.read()
+        csv_save_name = flight_data_file.filename
+        csv_save_path = os.path.join(metadata_dir, csv_save_name)
+        with open(csv_save_path, "wb") as f:
+            f.write(csv_data)
+        attached_files.append({"type": "flight_data", "filename": csv_save_name})
+        # Try to parse CSV into gps.json (if no GPS file was provided)
+        if not (gps_file and gps_file.filename):
+            try:
+                import csv
+                import io
+                reader = csv.DictReader(io.StringIO(csv_data.decode("utf-8")))
+                gps_points = []
+                for row in reader:
+                    # Try common column name variations
+                    lat = None
+                    lon = None
+                    alt = 0
+                    for lat_key in ["latitude", "lat", "Latitude", "Lat"]:
+                        if lat_key in row:
+                            lat = float(row[lat_key])
+                            break
+                    for lon_key in ["longitude", "lon", "lng", "Longitude", "Lon", "Lng"]:
+                        if lon_key in row:
+                            lon = float(row[lon_key])
+                            break
+                    for alt_key in ["altitude", "alt", "Altitude", "Alt", "elevation", "height"]:
+                        if alt_key in row:
+                            try:
+                                alt = float(row[alt_key])
+                            except (ValueError, TypeError):
+                                alt = 0
+                            break
+                    if lat is not None and lon is not None:
+                        point = {"latitude": lat, "longitude": lon, "altitude": alt}
+                        if "filename" in row:
+                            point["filename"] = row["filename"]
+                        gps_points.append(point)
+                if gps_points:
+                    with open(os.path.join(metadata_dir, "gps.json"), "w") as f:
+                        json.dump(gps_points, f, indent=2)
+            except Exception:
+                pass
+
+    # Telemetry / SRT
+    if telemetry_file and telemetry_file.filename:
+        telem_data = await telemetry_file.read()
+        telem_save_name = telemetry_file.filename
+        telem_save_path = os.path.join(metadata_dir, telem_save_name)
+        with open(telem_save_path, "wb") as f:
+            f.write(telem_data)
+        attached_files.append({"type": "telemetry", "filename": telem_save_name})
+        # If it's a JSON telemetry file, save as telemetry.json
+        if telem_save_name.lower().endswith(".json"):
+            try:
+                parsed = json.loads(telem_data)
+                with open(os.path.join(metadata_dir, "telemetry.json"), "w") as f:
+                    json.dump(parsed, f, indent=2)
+            except (json.JSONDecodeError, Exception):
+                pass
+
     # Register job
     jobs[job_id] = {
         "id": job_id,
@@ -209,12 +317,27 @@ async def upload_video(
         "logs": [],
         "metadata": {},
         "result": {},
+        "attached_files": attached_files,
     }
+
+    # Pre-load GPS metadata if available
+    gps_json_path = os.path.join(metadata_dir, "gps.json")
+    if os.path.isfile(gps_json_path):
+        try:
+            with open(gps_json_path, "r") as f:
+                jobs[job_id]["metadata"]["gps"] = json.load(f)
+        except Exception:
+            pass
 
     # Save job state to disk
     _save_job_state(job_id)
 
-    return {"job_id": job_id, "status": "uploaded", "video_size_mb": jobs[job_id]["video_size_mb"]}
+    return {
+        "job_id": job_id,
+        "status": "uploaded",
+        "video_size_mb": jobs[job_id]["video_size_mb"],
+        "attached_files": attached_files,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────

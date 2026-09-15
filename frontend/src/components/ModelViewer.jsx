@@ -13,8 +13,12 @@ function Model({ url, onLoaded }) {
   const { scene } = useGLTF(url);
   const ref = useRef();
 
-  // Auto-center and scale model
+  // Auto-center, scale, and fix orientation (Z-up → Y-up)
   useMemo(() => {
+    // First, rotate from Z-up to Y-up
+    scene.rotation.x = -Math.PI / 2;
+    scene.updateMatrixWorld(true);
+
     const box = new THREE.Box3().setFromObject(scene);
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);

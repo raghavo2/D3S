@@ -17,11 +17,16 @@ export function useApi() {
   /** Health check */
   const getHealth = () => request('/api/health');
 
-  /** Upload a video file and create a job */
-  const uploadVideo = async (file, fps, onProgress) => {
+  /** Upload a video file and create a job, with optional flight data attachments */
+  const uploadVideo = async (file, fps, onProgress, extraFiles = {}) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('fps', fps.toString());
+
+    // Append optional flight data files
+    if (extraFiles.gpsFile) formData.append('gps_file', extraFiles.gpsFile);
+    if (extraFiles.flightDataFile) formData.append('flight_data_file', extraFiles.flightDataFile);
+    if (extraFiles.telemetryFile) formData.append('telemetry_file', extraFiles.telemetryFile);
 
     const xhr = new XMLHttpRequest();
     return new Promise((resolve, reject) => {
