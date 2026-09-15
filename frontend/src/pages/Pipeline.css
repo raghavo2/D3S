@@ -1,0 +1,303 @@
+.pipeline-page {
+  min-height: 100vh;
+  padding: calc(var(--nav-height) + var(--space-2xl)) var(--space-xl) var(--space-2xl);
+}
+
+.pipeline-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: var(--space-xl);
+}
+
+.pipeline-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pipeline-header h1 {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* ─── Stage Stepper ─── */
+.stepper {
+  position: sticky;
+  top: calc(var(--nav-height) + var(--space-xl));
+  align-self: start;
+}
+
+.stepper-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.stepper-item {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  position: relative;
+}
+
+.stepper-item.active {
+  background: var(--glass-bg-hover);
+}
+
+/* Vertical line connecting steps */
+.stepper-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--space-md) + 16px);
+  top: calc(var(--space-md) + 36px);
+  width: 2px;
+  height: calc(100% - 20px);
+  background: var(--glass-border);
+}
+
+.stepper-item.complete:not(:last-child)::after {
+  background: var(--status-success);
+}
+
+.stepper-item.running:not(:last-child)::after {
+  background: rgba(255, 255, 255, 0.25);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.stepper-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  background: var(--bg-surface);
+  border: 2px solid var(--glass-border);
+  transition: all var(--transition-base);
+}
+
+.stepper-item.pending .stepper-icon {
+  color: var(--text-muted);
+}
+
+.stepper-item.running .stepper-icon {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
+  animation: glow 2s ease-in-out infinite;
+}
+
+.stepper-item.complete .stepper-icon {
+  border-color: var(--status-success);
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.stepper-item.error .stepper-icon {
+  border-color: var(--status-error);
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.stepper-item.warning .stepper-icon {
+  border-color: var(--status-warning);
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.stepper-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.stepper-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.stepper-item.pending .stepper-label {
+  color: var(--text-muted);
+}
+
+.stepper-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.stepper-status-text {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.stepper-item.running .stepper-status-text {
+  color: var(--accent-cyan);
+}
+
+.stepper-item.complete .stepper-status-text {
+  color: var(--status-success);
+}
+
+.stepper-item.error .stepper-status-text {
+  color: var(--status-error);
+}
+
+/* ─── Right Panel ─── */
+.pipeline-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* ─── Log Terminal ─── */
+.log-terminal {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  flex: 1;
+  min-height: 400px;
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.log-header-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.log-header-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.log-header-dot.connected {
+  background: var(--status-success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.log-header-dot.disconnected {
+  background: var(--status-error);
+}
+
+.log-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.8;
+  background: var(--bg-surface);
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+.log-line.stage-event {
+  color: var(--accent-cyan);
+  font-weight: 500;
+}
+
+.log-line.error-event {
+  color: var(--status-error);
+}
+
+.log-line.success-event {
+  color: var(--status-success);
+}
+
+/* ─── Metadata Panel ─── */
+.metadata-panel {
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+}
+
+.metadata-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.metadata-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm) var(--space-lg);
+}
+
+.metadata-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metadata-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.metadata-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ─── Complete Banner ─── */
+.complete-banner {
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  text-align: center;
+}
+
+.complete-banner h3 {
+  color: var(--status-success);
+  font-size: 1.1rem;
+  margin-bottom: var(--space-sm);
+}
+
+.complete-banner p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: var(--space-md);
+}
+
+@media (max-width: 900px) {
+  .pipeline-layout {
+    grid-template-columns: 1fr;
+  }
+  .stepper {
+    position: static;
+  }
+}

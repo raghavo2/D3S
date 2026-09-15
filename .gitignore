@@ -1,21 +1,62 @@
-# Ignore deep learning weights
+# ─── Dependencies ───
+venv/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# ─── Python ───
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+
+# ─── Deep Learning ───
 checkpoints/
 *.pth
+*.pt
 
-# Ignore large datasets and telemetry
-AGZ_subset/
-*.bag
-*.npz
-
-# Ignore heavy 3D outputs and binaries
-drone_deliverables/
-colmap_output/
-colmap-x64-windows-cuda/
+# ─── Large Files & 3D Outputs ───
 *.ply
 *.obj
 *.glb
 *.las
 *.fbx
+*.bag
+*.npz
+dust3r_multiview_colored.ply
+final_presentation_model.obj
 
-# Python caches
-__pycache__/
+# ─── Data Directories ───
+AGZ_subset/
+drone_deliverables/
+colmap_output/
+colmap-x64-windows-cuda/
+uploads/
+jobs/
+
+# ─── Runtime ───
+test.db
+test.db-shm
+test.db-wal
+test.mp4
+*.log
+
+# ─── IDE / OS ───
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# ─── Environment ───
+.env
+.env.local
+.env.*.local
+
+# ─── Gemini agent artifacts ───
+.gemini/
+.agents/

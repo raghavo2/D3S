@@ -14,10 +14,15 @@ sys.path.insert(0, d3r_path)
 # Ensure croco is in path
 sys.path.insert(0, os.path.join(d3r_path, "croco"))
 
+# pyrefly: ignore [missing-import]
 from dust3r.inference import inference
+# pyrefly: ignore [missing-import]
 from dust3r.model import AsymmetricCroCo3DStereo
+# pyrefly: ignore [missing-import]
 from dust3r.utils.image import load_images
+# pyrefly: ignore [missing-import]
 from dust3r.image_pairs import make_pairs
+# pyrefly: ignore [missing-import]
 from dust3r.cloud_opt import global_aligner, GlobalAlignerMode
 
 def main():

@@ -1,0 +1,100 @@
+.export-panel {
+  position: relative;
+}
+
+.export-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.export-toggle:hover {
+  color: var(--text-primary);
+  background: var(--glass-bg);
+}
+
+.export-chevron {
+  transition: transform var(--transition-fast);
+  font-size: 0.7rem;
+}
+
+.export-chevron.up {
+  transform: rotate(180deg);
+}
+
+.export-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 280px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.export-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px var(--space-md);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background var(--transition-fast);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.export-item:last-child {
+  border-bottom: none;
+}
+
+.export-item:hover {
+  background: var(--glass-bg-hover);
+}
+
+.export-item-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.export-item-name {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.export-item-size {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.export-item-dl {
+  font-size: 0.8rem;
+  opacity: 0.4;
+  transition: opacity var(--transition-fast);
+}
+
+.export-item:hover .export-item-dl {
+  opacity: 1;
+}
+
+.export-loading {
+  padding: var(--space-md);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
