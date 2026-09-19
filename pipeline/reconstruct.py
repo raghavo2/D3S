@@ -78,10 +78,15 @@ def reconstruct_point_cloud(
 
     torch.serialization.add_safe_globals([argparse.Namespace])
 
+    # pyrefly: ignore [missing-import]
     from dust3r.model import AsymmetricCroCo3DStereo
+    # pyrefly: ignore [missing-import]
     from dust3r.inference import inference
+    # pyrefly: ignore [missing-import]
     from dust3r.utils.image import load_images
+    # pyrefly: ignore [missing-import]
     from dust3r.image_pairs import make_pairs
+    # pyrefly: ignore [missing-import]
     from dust3r.cloud_opt import global_aligner, GlobalAlignerMode
 
     # --- Device selection ---
