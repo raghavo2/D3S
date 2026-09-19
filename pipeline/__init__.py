@@ -12,6 +12,8 @@ from pipeline.config import ProjectConfig
 from pipeline.frames import extract_frames
 from pipeline.quality import score_all_frames, filter_frames
 from pipeline.keyframes import select_keyframes, copy_keyframes
+from pipeline.detection import detect_objects, save_detections
+from pipeline.masking import generate_masks
 from pipeline.metadata import extract_gps_from_images, extract_telemetry_from_bag
 from pipeline.reconstruct import reconstruct_point_cloud
 from pipeline.mesh import generate_mesh
@@ -24,6 +26,9 @@ __all__ = [
     "filter_frames",
     "select_keyframes",
     "copy_keyframes",
+    "detect_objects",
+    "save_detections",
+    "generate_masks",
     "extract_gps_from_images",
     "extract_telemetry_from_bag",
     "reconstruct_point_cloud",

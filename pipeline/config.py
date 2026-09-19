@@ -36,6 +36,7 @@ class ProjectConfig:
         {"id": "frame_extraction", "label": "Frame Extraction", "icon": "🎞️"},
         {"id": "quality_filtering", "label": "Quality Filtering", "icon": "🔍"},
         {"id": "keyframe_selection", "label": "Keyframe Selection", "icon": "🎯"},
+        {"id": "object_detection", "label": "Object Detection", "icon": "🚨"},
         {"id": "metadata_extraction", "label": "Metadata Extraction", "icon": "📡"},
         {"id": "point_cloud_generation", "label": "Point Cloud Generation", "icon": "☁️"},
         {"id": "surface_meshing", "label": "Surface Meshing", "icon": "🔺"},
@@ -58,6 +59,10 @@ class ProjectConfig:
     DEFAULT_MIN_TEMPORAL_GAP = 1          # Min frame gap between keyframes
     DEFAULT_MAX_TEMPORAL_GAP = 10         # Force-include if gap exceeds this
 
+    # --- Object detection defaults ---
+    DEFAULT_YOLO_CONFIDENCE = 0.35        # Minimum detection confidence
+    DEFAULT_MASK_PADDING_PX = 10          # Bbox expansion for shadows/reflections
+
     def job_dir(self, job_id):
         """Return the directory for a specific job, creating it if needed."""
         path = os.path.join(self.jobs_dir, job_id)
@@ -72,6 +77,12 @@ class ProjectConfig:
     def job_keyframes_dir(self, job_id):
         """Return the directory for selected keyframes."""
         path = os.path.join(self.job_dir(job_id), "keyframes")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def job_masks_dir(self, job_id):
+        """Return the directory for dynamic object masks."""
+        path = os.path.join(self.job_dir(job_id), "masks")
         os.makedirs(path, exist_ok=True)
         return path
 

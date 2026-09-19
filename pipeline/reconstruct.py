@@ -21,6 +21,7 @@ def reconstruct_point_cloud(
     batch_size=1,
     scene_graph="swin-3",
     alignment_iters=300,
+    mask_dir=None,
     on_log=None,
 ):
     """
@@ -35,10 +36,14 @@ def reconstruct_point_cloud(
         batch_size: Inference batch size (default 1 for safe VRAM).
         scene_graph: DUSt3R scene graph type (default 'swin-3').
         alignment_iters: Global alignment iterations (default 300).
+        mask_dir: Optional directory containing per-frame binary masks
+                  (from pipeline.masking). Pixels marked as dynamic objects
+                  are excluded from the output point cloud. DUSt3R still
+                  runs inference on full images for context.
         on_log: Optional progress callback.
 
     Returns:
-        dict with keys: point_count, output_ply
+        dict with keys: point_count, output_ply, masked_points (if masks used)
     """
     log = on_log or (lambda msg: None)
 
@@ -131,6 +136,19 @@ def reconstruct_point_cloud(
     )
     log("Global alignment complete.")
 
+    # --- Load dynamic object masks if available ---
+    dynamic_masks = {}
+    if mask_dir and os.path.isdir(mask_dir):
+        from pipeline.masking import load_mask_for_frame
+        log(f"Loading dynamic object masks from {mask_dir}…")
+        for idx, img_path in enumerate(image_paths):
+            fname = os.path.basename(img_path)
+            dm = load_mask_for_frame(mask_dir, fname, target_size=(image_size, image_size))
+            if dm is not None:
+                dynamic_masks[idx] = dm
+        active_masks = sum(1 for m in dynamic_masks.values() if not m.all())
+        log(f"  Loaded {len(dynamic_masks)} masks ({active_masks} have masked regions)")
+
     # --- Extract colored point cloud ---
     log("Extracting colored point cloud…")
     imgs = scene.imgs
@@ -139,6 +157,7 @@ def reconstruct_point_cloud(
 
     all_points = []
     all_colors = []
+    total_masked_points = 0
 
     for i in range(len(pts3d)):
         points = pts3d[i].detach().cpu().numpy()
@@ -155,6 +174,16 @@ def reconstruct_point_cloud(
             image = image * 255.0
         image = np.clip(image, 0, 255).astype(np.uint8)
 
+        # Apply dynamic object mask if available
+        if i in dynamic_masks:
+            dm = dynamic_masks[i]
+            if dm.shape == mask.shape:
+                before_count = int(mask.sum())
+                mask = mask & dm
+                excluded = before_count - int(mask.sum())
+                if excluded > 0:
+                    total_masked_points += excluded
+
         points = points[mask]
         colors = image[mask]
         valid = np.isfinite(points).all(axis=1)
@@ -167,6 +196,8 @@ def reconstruct_point_cloud(
     all_points = np.concatenate(all_points, axis=0)
     all_colors = np.concatenate(all_colors, axis=0)
 
+    if total_masked_points > 0:
+        log(f"Excluded {total_masked_points} dynamic-object points")
     log(f"Total colored points: {len(all_points)}")
 
     # --- Export PLY ---
@@ -183,4 +214,5 @@ def reconstruct_point_cloud(
     return {
         "point_count": len(all_points),
         "output_ply": output_ply,
+        "masked_points": total_masked_points,
     }
