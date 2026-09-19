@@ -10,6 +10,8 @@ Original standalone scripts are preserved unchanged for backward compatibility.
 
 from pipeline.config import ProjectConfig
 from pipeline.frames import extract_frames
+from pipeline.quality import score_all_frames, filter_frames
+from pipeline.keyframes import select_keyframes, copy_keyframes
 from pipeline.metadata import extract_gps_from_images, extract_telemetry_from_bag
 from pipeline.reconstruct import reconstruct_point_cloud
 from pipeline.mesh import generate_mesh
@@ -18,6 +20,10 @@ from pipeline.export import export_deliverables
 __all__ = [
     "ProjectConfig",
     "extract_frames",
+    "score_all_frames",
+    "filter_frames",
+    "select_keyframes",
+    "copy_keyframes",
     "extract_gps_from_images",
     "extract_telemetry_from_bag",
     "reconstruct_point_cloud",
