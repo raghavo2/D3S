@@ -82,7 +82,7 @@ export default function Pipeline() {
     }
 
     if (msg.type === 'pipeline') {
-      setPipelineStatus(msg.status === 'complete' ? 'complete' : msg.status);
+      setPipelineStatus(msg.status);
     }
 
     if (msg.type === 'log') {
@@ -107,9 +107,9 @@ export default function Pipeline() {
     }
   }, [pipelineStatus, startTime]);
 
-  // Auto-redirect on completion
+  // Auto-redirect on full completion (not on viewable — user may want to watch progress)
   useEffect(() => {
-    if (pipelineStatus === 'complete') {
+    if (pipelineStatus === 'complete' || pipelineStatus === 'complete_partial') {
       const timer = setTimeout(() => navigate(`/viewer?job=${jobId}`), 5000);
       return () => clearTimeout(timer);
     }
@@ -168,12 +168,15 @@ export default function Pipeline() {
             <span className="pipeline-job-id">{jobId?.slice(0, 8)}</span>
           </div>
           <span className={`badge ${
-            pipelineStatus === 'complete' ? 'badge-success' :
+            pipelineStatus === 'complete' || pipelineStatus === 'complete_partial' ? 'badge-success' :
             pipelineStatus === 'failed' || pipelineStatus === 'interrupted' ? 'badge-error' :
+            pipelineStatus === 'viewable' ? 'badge-info' :
             pipelineStatus === 'uploaded' ? 'badge-warning' :
             'badge-info'
           }`}>
             {pipelineStatus === 'complete' ? '✓ Complete' :
+             pipelineStatus === 'complete_partial' ? '✓ Complete (partial)' :
+             pipelineStatus === 'viewable' ? '☁️ Point Cloud Ready' :
              pipelineStatus === 'failed' ? '✗ Failed' :
              pipelineStatus === 'interrupted' ? 'Interrupted' :
              pipelineStatus === 'uploaded' ? 'Uploaded' :
@@ -181,11 +184,28 @@ export default function Pipeline() {
           </span>
         </div>
 
+        {/* Point Cloud Ready Banner */}
+        {pipelineStatus === 'viewable' && (
+          <div className="complete-banner animate-slide-up" style={{ borderColor: 'rgba(56, 189, 248, 0.3)', background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(14, 165, 233, 0.04))' }}>
+            <h3>☁️ Point Cloud Ready</h3>
+            <p>Your point cloud is ready for preview. Mesh generation is still running in the background.</p>
+            <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Link to={`/viewer?job=${jobId}&mode=pointcloud`} className="btn btn-primary">
+                Preview Point Cloud →
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Completion Banner */}
-        {pipelineStatus === 'complete' && (
+        {(pipelineStatus === 'complete' || pipelineStatus === 'complete_partial') && (
           <div className="complete-banner animate-slide-up">
             <h3>Reconstruction Complete</h3>
-            <p>Your 3D model is ready for interactive viewing.</p>
+            <p>
+              {pipelineStatus === 'complete_partial'
+                ? 'Point cloud is ready. Some post-processing stages had issues — mesh may not be available.'
+                : 'Your 3D model is ready for interactive viewing.'}
+            </p>
             <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link to={`/viewer?job=${jobId}`} className="btn btn-primary">
                 Open 3D Viewer →

@@ -34,6 +34,10 @@ class ProjectConfig:
     # --- Pipeline stage definitions ---
     STAGES = [
         {"id": "frame_extraction", "label": "Frame Extraction", "icon": "🎞️"},
+        {"id": "quality_filtering", "label": "Quality Filtering", "icon": "🔍"},
+        {"id": "keyframe_selection", "label": "Keyframe Selection", "icon": "🎯"},
+        {"id": "object_detection", "label": "Object Detection", "icon": "🚨"},
+        {"id": "colmap_pose_estimation", "label": "COLMAP Pose Estimation", "icon": "📰"},
         {"id": "metadata_extraction", "label": "Metadata Extraction", "icon": "📡"},
         {"id": "point_cloud_generation", "label": "Point Cloud Generation", "icon": "☁️"},
         {"id": "surface_meshing", "label": "Surface Meshing", "icon": "🔺"},
@@ -47,6 +51,25 @@ class ProjectConfig:
     DEFAULT_ALIGNMENT_ITERS = 300
     MAX_UPLOAD_SIZE_MB = 1024  # 1 GB cap
 
+    # --- Quality filtering defaults ---
+    DEFAULT_BLUR_REJECT_PERCENTILE = 20   # Reject bottom 20% sharpness
+    DEFAULT_MAX_CLIPPING_RATIO = 0.05     # Reject if >5% pixels clipped
+
+    # --- Keyframe selection defaults ---
+    DEFAULT_SSIM_THRESHOLD = 0.92         # SSIM above this = near-duplicate
+    DEFAULT_MIN_TEMPORAL_GAP = 1          # Min frame gap between keyframes
+    DEFAULT_MAX_TEMPORAL_GAP = 10         # Force-include if gap exceeds this
+
+    # --- Object detection defaults ---
+    DEFAULT_YOLO_CONFIDENCE = 0.35        # Minimum detection confidence
+    DEFAULT_MASK_PADDING_PX = 10          # Bbox expansion for shadows/reflections
+    DEFAULT_MOVEMENT_THRESHOLD = 5.0      # Compensated px movement → MOVING if above
+    DEFAULT_ORB_FEATURES = 1500           # ORB features for camera motion estimation
+
+    # --- COLMAP defaults ---
+    DEFAULT_COLMAP_FEATURE_TYPE = "ALIKED"           # Neural features for RTX 40-series
+    DEFAULT_COLMAP_MATCHING_TYPE = "ALIKED_BRUTEFORCE"
+
     def job_dir(self, job_id):
         """Return the directory for a specific job, creating it if needed."""
         path = os.path.join(self.jobs_dir, job_id)
@@ -58,8 +81,26 @@ class ProjectConfig:
         os.makedirs(path, exist_ok=True)
         return path
 
+    def job_keyframes_dir(self, job_id):
+        """Return the directory for selected keyframes."""
+        path = os.path.join(self.job_dir(job_id), "keyframes")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def job_masks_dir(self, job_id):
+        """Return the directory for dynamic object masks."""
+        path = os.path.join(self.job_dir(job_id), "masks")
+        os.makedirs(path, exist_ok=True)
+        return path
+
     def job_metadata_dir(self, job_id):
         path = os.path.join(self.job_dir(job_id), "metadata")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def job_colmap_dir(self, job_id):
+        """Return the directory for COLMAP output (database, sparse model, poses)."""
+        path = os.path.join(self.job_dir(job_id), "colmap")
         os.makedirs(path, exist_ok=True)
         return path
 

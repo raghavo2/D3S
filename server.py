@@ -821,11 +821,18 @@ async def _run_pipeline_subprocess(job_id: str):
 
             elif event.get("type") == "pipeline":
                 status = event.get("status")
-                job["status"] = "complete" if status == "complete" else status
-                if status == "complete":
-                    job["completed_at"] = datetime.now().isoformat()
-                    # Collect result file paths
+                if status == "viewable":
+                    # Point cloud is ready — mark job as viewable for early preview
+                    job["status"] = "viewable"
+                    job["viewable_at"] = datetime.now().isoformat()
                     job["result"] = _collect_job_results(job_id)
+                    _save_job_state(job_id)
+                elif status in ("complete", "complete_partial"):
+                    job["status"] = status
+                    job["completed_at"] = datetime.now().isoformat()
+                    job["result"] = _collect_job_results(job_id)
+                else:
+                    job["status"] = status
 
             # Buffer log entry
             job["logs"].append(event)
