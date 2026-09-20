@@ -22,6 +22,7 @@ def reconstruct_point_cloud(
     scene_graph="swin-3",
     alignment_iters=300,
     mask_dir=None,
+    colmap_poses_json=None,
     on_log=None,
 ):
     """
@@ -40,10 +41,15 @@ def reconstruct_point_cloud(
                   (from pipeline.masking). Pixels marked as dynamic objects
                   are excluded from the output point cloud. DUSt3R still
                   runs inference on full images for context.
+        colmap_poses_json: Optional path to COLMAP poses JSON file
+                          (from pipeline.colmap). When available, COLMAP camera
+                          poses are loaded for comparison and future pose-guided
+                          reconstruction (Option B).
         on_log: Optional progress callback.
 
     Returns:
-        dict with keys: point_count, output_ply, masked_points (if masks used)
+        dict with keys: point_count, output_ply, masked_points (if masks used),
+                        colmap_registered (if COLMAP poses available)
     """
     log = on_log or (lambda msg: None)
 
@@ -61,6 +67,17 @@ def reconstruct_point_cloud(
         raise FileNotFoundError(
             f"DUSt3R model not found: {model_path}. Run download_model.py first."
         )
+
+    # --- Load COLMAP poses if available ---
+    colmap_data = None
+    if colmap_poses_json and os.path.isfile(colmap_poses_json):
+        log(f"Loading COLMAP poses from {colmap_poses_json}…")
+        with open(colmap_poses_json, "r", encoding="utf-8") as f:
+            colmap_data = json.load(f)
+        registered = colmap_data.get("registered_images", 0)
+        total = colmap_data.get("total_images", 0)
+        log(f"  COLMAP registered {registered}/{total} images")
+        log(f"  Camera models: {len(colmap_data.get('cameras', {}))}")
 
     # --- Setup sys.path for DUSt3R imports ---
     if d3r_path not in sys.path:
@@ -141,6 +158,34 @@ def reconstruct_point_cloud(
     )
     log("Global alignment complete.")
 
+    # --- Save COLMAP pose comparison data alongside output ---
+    if colmap_data is not None:
+        colmap_comparison_path = os.path.join(
+            os.path.dirname(output_ply), "pose_comparison.json"
+        )
+        try:
+            # Extract DUSt3R poses for comparison
+            dust3r_poses = []
+            im_poses = scene.get_im_poses()
+            for idx, img_path in enumerate(image_paths):
+                fname = os.path.basename(img_path)
+                pose_mat = im_poses[idx].detach().cpu().numpy()
+                dust3r_poses.append({
+                    "filename": fname,
+                    "dust3r_pose": pose_mat.tolist(),
+                })
+
+            comparison = {
+                "dust3r_poses": dust3r_poses,
+                "colmap_poses": colmap_data.get("poses", {}),
+                "colmap_cameras": colmap_data.get("cameras", {}),
+            }
+            with open(colmap_comparison_path, "w", encoding="utf-8") as f:
+                json.dump(comparison, f, indent=2)
+            log(f"Pose comparison data saved: {colmap_comparison_path}")
+        except Exception as e:
+            log(f"Warning: Could not save pose comparison: {e}")
+
     # --- Load dynamic object masks if available ---
     dynamic_masks = {}
     if mask_dir and os.path.isdir(mask_dir):
@@ -216,8 +261,11 @@ def reconstruct_point_cloud(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    return {
+    result = {
         "point_count": len(all_points),
         "output_ply": output_ply,
         "masked_points": total_masked_points,
     }
+    if colmap_data is not None:
+        result["colmap_registered"] = colmap_data.get("registered_images", 0)
+    return result

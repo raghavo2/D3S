@@ -37,6 +37,7 @@ class ProjectConfig:
         {"id": "quality_filtering", "label": "Quality Filtering", "icon": "🔍"},
         {"id": "keyframe_selection", "label": "Keyframe Selection", "icon": "🎯"},
         {"id": "object_detection", "label": "Object Detection", "icon": "🚨"},
+        {"id": "colmap_pose_estimation", "label": "COLMAP Pose Estimation", "icon": "📰"},
         {"id": "metadata_extraction", "label": "Metadata Extraction", "icon": "📡"},
         {"id": "point_cloud_generation", "label": "Point Cloud Generation", "icon": "☁️"},
         {"id": "surface_meshing", "label": "Surface Meshing", "icon": "🔺"},
@@ -65,6 +66,10 @@ class ProjectConfig:
     DEFAULT_MOVEMENT_THRESHOLD = 5.0      # Compensated px movement → MOVING if above
     DEFAULT_ORB_FEATURES = 1500           # ORB features for camera motion estimation
 
+    # --- COLMAP defaults ---
+    DEFAULT_COLMAP_FEATURE_TYPE = "ALIKED"           # Neural features for RTX 40-series
+    DEFAULT_COLMAP_MATCHING_TYPE = "ALIKED_BRUTEFORCE"
+
     def job_dir(self, job_id):
         """Return the directory for a specific job, creating it if needed."""
         path = os.path.join(self.jobs_dir, job_id)
@@ -90,6 +95,12 @@ class ProjectConfig:
 
     def job_metadata_dir(self, job_id):
         path = os.path.join(self.job_dir(job_id), "metadata")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def job_colmap_dir(self, job_id):
+        """Return the directory for COLMAP output (database, sparse model, poses)."""
+        path = os.path.join(self.job_dir(job_id), "colmap")
         os.makedirs(path, exist_ok=True)
         return path
 

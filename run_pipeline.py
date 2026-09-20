@@ -31,13 +31,13 @@ def make_logger(stage_id):
 def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
     """Run the full pipeline for a given job."""
 
-    # Import pipeline modules (lazy — avoids loading heavy deps at parse time)
     from pipeline.config import ProjectConfig
     from pipeline.frames import extract_frames
     from pipeline.quality import score_all_frames, filter_frames
     from pipeline.keyframes import select_keyframes, copy_keyframes
     from pipeline.detection import detect_objects, save_detections
     from pipeline.masking import generate_masks
+    from pipeline.colmap import run_colmap
     from pipeline.metadata import extract_gps_from_images, extract_telemetry_from_bag
     from pipeline.reconstruct import reconstruct_point_cloud
     from pipeline.mesh import generate_mesh
@@ -48,6 +48,7 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
     frames_dir = config.job_frames_dir(job_id)
     keyframes_dir = config.job_keyframes_dir(job_id)
     masks_dir = config.job_masks_dir(job_id)
+    colmap_dir = config.job_colmap_dir(job_id)
     metadata_dir = config.job_metadata_dir(job_id)
     output_dir = config.job_output_dir(job_id)
     deliverables_dir = config.job_deliverables_dir(job_id)
@@ -188,7 +189,38 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
         # Object detection is non-critical -- continue without masks
         emit("stage", stage="object_detection", status="warning", error=str(e))
 
-    # == Stage 5: Metadata Extraction =====================================
+    # == Stage 5: COLMAP Pose Estimation ===================================
+    colmap_poses = None
+    emit("stage", stage="colmap_pose_estimation", status="running")
+    try:
+        if not os.path.isfile(config.colmap_exe):
+            emit("stage", stage="colmap_pose_estimation", status="skipped",
+                 result={"message": "COLMAP executable not found -- skipping"})
+        else:
+            colmap_result = run_colmap(
+                images_dir,
+                colmap_dir,
+                colmap_exe=config.colmap_exe,
+                feature_type=config.DEFAULT_COLMAP_FEATURE_TYPE,
+                matching_type=config.DEFAULT_COLMAP_MATCHING_TYPE,
+                on_log=make_logger("colmap_pose_estimation"),
+            )
+
+            if colmap_result["success"]:
+                colmap_poses = colmap_result.get("poses_json_path")
+                emit("stage", stage="colmap_pose_estimation", status="complete", result={
+                    "registered_images": colmap_result["registered_images"],
+                    "total_images": colmap_result["total_images"],
+                    "camera_models": len(colmap_result.get("cameras", {})),
+                })
+            else:
+                emit("stage", stage="colmap_pose_estimation", status="warning",
+                     error=colmap_result.get("error", "Unknown error"))
+    except Exception as e:
+        # COLMAP is non-critical -- continue with DUSt3R-only reconstruction
+        emit("stage", stage="colmap_pose_estimation", status="warning", error=str(e))
+
+    # == Stage 6: Metadata Extraction ======================================
     emit("stage", stage="metadata_extraction", status="running")
     try:
         gps_data = extract_gps_from_images(
@@ -213,13 +245,14 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
         # Metadata is non-critical -- log and continue
         emit("stage", stage="metadata_extraction", status="warning", error=str(e))
 
-    # == Stage 6: Point Cloud Generation ==================================
+    # == Stage 7: Point Cloud Generation ===================================
     emit("stage", stage="point_cloud_generation", status="running")
     try:
         result = reconstruct_point_cloud(
             images_dir, output_ply,
             model_path=config.model_path,
             mask_dir=mask_dir_for_reconstruction,
+            colmap_poses_json=colmap_poses,
             on_log=make_logger("point_cloud_generation"),
         )
         emit("stage", stage="point_cloud_generation", status="complete", result=result)
@@ -229,7 +262,7 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
         emit("pipeline", status="failed", error=str(e))
         return
 
-    # == Stage 7: Surface Meshing ==========================================
+    # == Stage 8: Surface Meshing ==========================================
     emit("stage", stage="surface_meshing", status="running")
     try:
         result = generate_mesh(
@@ -243,7 +276,7 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
         emit("pipeline", status="failed", error=str(e))
         return
 
-    # == Stage 8: Deliverable Export ========================================
+    # == Stage 9: Deliverable Export ========================================
     emit("stage", stage="deliverable_export", status="running")
     try:
         result = export_deliverables(
