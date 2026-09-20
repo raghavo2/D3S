@@ -60,3 +60,5 @@ desktop.ini
 # ─── Gemini agent artifacts ───
 .gemini/
 .agents/
+
+vcpkg/
