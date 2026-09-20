@@ -62,6 +62,8 @@ class ProjectConfig:
     # --- Object detection defaults ---
     DEFAULT_YOLO_CONFIDENCE = 0.35        # Minimum detection confidence
     DEFAULT_MASK_PADDING_PX = 10          # Bbox expansion for shadows/reflections
+    DEFAULT_MOVEMENT_THRESHOLD = 5.0      # Compensated px movement → MOVING if above
+    DEFAULT_ORB_FEATURES = 1500           # ORB features for camera motion estimation
 
     def job_dir(self, job_id):
         """Return the directory for a specific job, creating it if needed."""

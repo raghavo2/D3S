@@ -151,6 +151,8 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
                 images_dir,
                 model_path=yolo_model_path,
                 confidence=config.DEFAULT_YOLO_CONFIDENCE,
+                movement_threshold=config.DEFAULT_MOVEMENT_THRESHOLD,
+                orb_features=config.DEFAULT_ORB_FEATURES,
                 on_log=make_logger("object_detection"),
             )
 
@@ -180,6 +182,7 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
                 "frames_with_dynamic": det_result["frames_with_dynamic"],
                 "masks_generated": mask_result.get("masked_frames", 0),
                 "class_summary": det_result["class_summary"],
+                "tracking_stats": det_result.get("tracking_stats", {}),
             })
     except Exception as e:
         # Object detection is non-critical -- continue without masks

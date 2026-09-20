@@ -46,6 +46,7 @@ def _compute_ssim(img_a, img_b, resize_dim=256):
 
     # Try scikit-image SSIM first (more accurate)
     try:
+        # pyrefly: ignore [missing-import]
         from skimage.metrics import structural_similarity
         return float(structural_similarity(a, b))
     except ImportError:
