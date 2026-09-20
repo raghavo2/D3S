@@ -21,6 +21,8 @@ def reconstruct_point_cloud(
     batch_size=1,
     scene_graph="swin-3",
     alignment_iters=300,
+    mask_dir=None,
+    colmap_poses_json=None,
     on_log=None,
 ):
     """
@@ -35,10 +37,19 @@ def reconstruct_point_cloud(
         batch_size: Inference batch size (default 1 for safe VRAM).
         scene_graph: DUSt3R scene graph type (default 'swin-3').
         alignment_iters: Global alignment iterations (default 300).
+        mask_dir: Optional directory containing per-frame binary masks
+                  (from pipeline.masking). Pixels marked as dynamic objects
+                  are excluded from the output point cloud. DUSt3R still
+                  runs inference on full images for context.
+        colmap_poses_json: Optional path to COLMAP poses JSON file
+                          (from pipeline.colmap). When available, COLMAP camera
+                          poses are loaded for comparison and future pose-guided
+                          reconstruction (Option B).
         on_log: Optional progress callback.
 
     Returns:
-        dict with keys: point_count, output_ply
+        dict with keys: point_count, output_ply, masked_points (if masks used),
+                        colmap_registered (if COLMAP poses available)
     """
     log = on_log or (lambda msg: None)
 
@@ -57,6 +68,17 @@ def reconstruct_point_cloud(
             f"DUSt3R model not found: {model_path}. Run download_model.py first."
         )
 
+    # --- Load COLMAP poses if available ---
+    colmap_data = None
+    if colmap_poses_json and os.path.isfile(colmap_poses_json):
+        log(f"Loading COLMAP poses from {colmap_poses_json}…")
+        with open(colmap_poses_json, "r", encoding="utf-8") as f:
+            colmap_data = json.load(f)
+        registered = colmap_data.get("registered_images", 0)
+        total = colmap_data.get("total_images", 0)
+        log(f"  COLMAP registered {registered}/{total} images")
+        log(f"  Camera models: {len(colmap_data.get('cameras', {}))}")
+
     # --- Setup sys.path for DUSt3R imports ---
     if d3r_path not in sys.path:
         sys.path.insert(0, d3r_path)
@@ -73,10 +95,15 @@ def reconstruct_point_cloud(
 
     torch.serialization.add_safe_globals([argparse.Namespace])
 
+    # pyrefly: ignore [missing-import]
     from dust3r.model import AsymmetricCroCo3DStereo
+    # pyrefly: ignore [missing-import]
     from dust3r.inference import inference
+    # pyrefly: ignore [missing-import]
     from dust3r.utils.image import load_images
+    # pyrefly: ignore [missing-import]
     from dust3r.image_pairs import make_pairs
+    # pyrefly: ignore [missing-import]
     from dust3r.cloud_opt import global_aligner, GlobalAlignerMode
 
     # --- Device selection ---
@@ -131,6 +158,47 @@ def reconstruct_point_cloud(
     )
     log("Global alignment complete.")
 
+    # --- Save COLMAP pose comparison data alongside output ---
+    if colmap_data is not None:
+        colmap_comparison_path = os.path.join(
+            os.path.dirname(output_ply), "pose_comparison.json"
+        )
+        try:
+            # Extract DUSt3R poses for comparison
+            dust3r_poses = []
+            im_poses = scene.get_im_poses()
+            for idx, img_path in enumerate(image_paths):
+                fname = os.path.basename(img_path)
+                pose_mat = im_poses[idx].detach().cpu().numpy()
+                dust3r_poses.append({
+                    "filename": fname,
+                    "dust3r_pose": pose_mat.tolist(),
+                })
+
+            comparison = {
+                "dust3r_poses": dust3r_poses,
+                "colmap_poses": colmap_data.get("poses", {}),
+                "colmap_cameras": colmap_data.get("cameras", {}),
+            }
+            with open(colmap_comparison_path, "w", encoding="utf-8") as f:
+                json.dump(comparison, f, indent=2)
+            log(f"Pose comparison data saved: {colmap_comparison_path}")
+        except Exception as e:
+            log(f"Warning: Could not save pose comparison: {e}")
+
+    # --- Load dynamic object masks if available ---
+    dynamic_masks = {}
+    if mask_dir and os.path.isdir(mask_dir):
+        from pipeline.masking import load_mask_for_frame
+        log(f"Loading dynamic object masks from {mask_dir}…")
+        for idx, img_path in enumerate(image_paths):
+            fname = os.path.basename(img_path)
+            dm = load_mask_for_frame(mask_dir, fname, target_size=(image_size, image_size))
+            if dm is not None:
+                dynamic_masks[idx] = dm
+        active_masks = sum(1 for m in dynamic_masks.values() if not m.all())
+        log(f"  Loaded {len(dynamic_masks)} masks ({active_masks} have masked regions)")
+
     # --- Extract colored point cloud ---
     log("Extracting colored point cloud…")
     imgs = scene.imgs
@@ -139,6 +207,7 @@ def reconstruct_point_cloud(
 
     all_points = []
     all_colors = []
+    total_masked_points = 0
 
     for i in range(len(pts3d)):
         points = pts3d[i].detach().cpu().numpy()
@@ -155,6 +224,16 @@ def reconstruct_point_cloud(
             image = image * 255.0
         image = np.clip(image, 0, 255).astype(np.uint8)
 
+        # Apply dynamic object mask if available
+        if i in dynamic_masks:
+            dm = dynamic_masks[i]
+            if dm.shape == mask.shape:
+                before_count = int(mask.sum())
+                mask = mask & dm
+                excluded = before_count - int(mask.sum())
+                if excluded > 0:
+                    total_masked_points += excluded
+
         points = points[mask]
         colors = image[mask]
         valid = np.isfinite(points).all(axis=1)
@@ -167,6 +246,8 @@ def reconstruct_point_cloud(
     all_points = np.concatenate(all_points, axis=0)
     all_colors = np.concatenate(all_colors, axis=0)
 
+    if total_masked_points > 0:
+        log(f"Excluded {total_masked_points} dynamic-object points")
     log(f"Total colored points: {len(all_points)}")
 
     # --- Export PLY ---
@@ -180,7 +261,11 @@ def reconstruct_point_cloud(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    return {
+    result = {
         "point_count": len(all_points),
         "output_ply": output_ply,
+        "masked_points": total_masked_points,
     }
+    if colmap_data is not None:
+        result["colmap_registered"] = colmap_data.get("registered_images", 0)
+    return result

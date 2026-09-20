@@ -17,3 +17,4 @@ roma
 tqdm
 huggingface-hub[torch]>=0.22
 rosbags
+ultralytics
