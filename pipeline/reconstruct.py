@@ -10,7 +10,75 @@ loading the model into memory.
 import os
 import sys
 import json
+import cv2
+import numpy as np
 
+
+def _resize_mask_like_dust3r(mask_bool, target_shape, image_size=512, patch_size=16):
+    """
+    Resize a full-resolution binary mask to match DUSt3R's internal
+    dimensions for a specific view.
+
+    DUSt3R's load_images does NOT simply resize to (image_size, image_size).
+    It does:
+      1. Resize the long edge to image_size (preserving aspect ratio)
+      2. Center-crop to patch-aligned dimensions (16px grid)
+      3. For non-square images: force 4:3 ratio (halfh = 3*halfw/4)
+
+    This function replicates that exact transform on the mask so the
+    masked regions align pixel-perfectly with the DUSt3R point cloud.
+
+    Args:
+        mask_bool: Boolean numpy array (H_orig, W_orig), True=include.
+        target_shape: (H_dust3r, W_dust3r) — actual shape from scene.get_masks()[i].
+        image_size: DUSt3R image_size parameter (default 512).
+        patch_size: DUSt3R patch grid size (default 16).
+
+    Returns:
+        Boolean numpy array of shape target_shape, or None if resize fails.
+    """
+    H_orig, W_orig = mask_bool.shape
+    H_target, W_target = target_shape
+
+    # Convert bool mask to uint8 for cv2 operations
+    mask_u8 = mask_bool.astype(np.uint8) * 255
+
+    # Step 1: Resize long edge to image_size, preserving aspect ratio
+    S = max(H_orig, W_orig)
+    new_W = int(round(W_orig * image_size / S))
+    new_H = int(round(H_orig * image_size / S))
+    mask_resized = cv2.resize(mask_u8, (new_W, new_H), interpolation=cv2.INTER_NEAREST)
+
+    # Step 2: Center crop to patch-aligned dims (replicating DUSt3R logic)
+    cx, cy = new_W // 2, new_H // 2
+    halfw = ((2 * cx) // patch_size) * patch_size / 2
+    halfh = ((2 * cy) // patch_size) * patch_size / 2
+
+    # Step 3: For non-square images, DUSt3R forces 4:3 aspect ratio
+    if new_W != new_H:
+        halfh = 3 * halfw / 4
+
+    x1 = int(cx - halfw)
+    y1 = int(cy - halfh)
+    x2 = int(cx + halfw)
+    y2 = int(cy + halfh)
+
+    # Clamp to valid range
+    x1 = max(0, x1)
+    y1 = max(0, y1)
+    x2 = min(new_W, x2)
+    y2 = min(new_H, y2)
+
+    mask_cropped = mask_resized[y1:y2, x1:x2]
+
+    # Final check: if dimensions still don't match (rounding), resize
+    if mask_cropped.shape[0] != H_target or mask_cropped.shape[1] != W_target:
+        mask_cropped = cv2.resize(
+            mask_cropped, (W_target, H_target),
+            interpolation=cv2.INTER_NEAREST
+        )
+
+    return mask_cropped > 127
 
 def reconstruct_point_cloud(
     image_dir,
@@ -186,24 +254,23 @@ def reconstruct_point_cloud(
         except Exception as e:
             log(f"Warning: Could not save pose comparison: {e}")
 
-    # --- Load dynamic object masks if available ---
-    dynamic_masks = {}
-    if mask_dir and os.path.isdir(mask_dir):
-        from pipeline.masking import load_mask_for_frame
-        log(f"Loading dynamic object masks from {mask_dir}…")
-        for idx, img_path in enumerate(image_paths):
-            fname = os.path.basename(img_path)
-            dm = load_mask_for_frame(mask_dir, fname, target_size=(image_size, image_size))
-            if dm is not None:
-                dynamic_masks[idx] = dm
-        active_masks = sum(1 for m in dynamic_masks.values() if not m.all())
-        log(f"  Loaded {len(dynamic_masks)} masks ({active_masks} have masked regions)")
 
     # --- Extract colored point cloud ---
     log("Extracting colored point cloud…")
     imgs = scene.imgs
     pts3d = scene.get_pts3d()
     masks = scene.get_masks()
+
+    # Pre-load original-resolution masks for DUSt3R-aligned resizing
+    # We must replicate DUSt3R's load_images resize logic on the mask:
+    #   1. Resize long edge to image_size (preserving aspect ratio)
+    #   2. Center-crop to patch-aligned dimensions (16px grid)
+    #   3. For non-square images, force 4:3 ratio (halfh = 3*halfw/4)
+    mask_load_fn = None
+    if mask_dir and os.path.isdir(mask_dir):
+        from pipeline.masking import load_mask_for_frame
+        log(f"Loading dynamic object masks from {mask_dir}…")
+        mask_load_fn = load_mask_for_frame
 
     all_points = []
     all_colors = []
@@ -224,15 +291,22 @@ def reconstruct_point_cloud(
             image = image * 255.0
         image = np.clip(image, 0, 255).astype(np.uint8)
 
-        # Apply dynamic object mask if available
-        if i in dynamic_masks:
-            dm = dynamic_masks[i]
-            if dm.shape == mask.shape:
-                before_count = int(mask.sum())
-                mask = mask & dm
-                excluded = before_count - int(mask.sum())
-                if excluded > 0:
-                    total_masked_points += excluded
+        # Apply dynamic object mask — resize to match DUSt3R's ACTUAL shape
+        if mask_load_fn is not None and i < len(image_paths):
+            fname = os.path.basename(image_paths[i])
+            # Load mask at original resolution (no target_size)
+            dm_orig = mask_load_fn(mask_dir, fname, target_size=None)
+            if dm_orig is not None:
+                # Replicate DUSt3R's exact resize + crop on the mask
+                dm = _resize_mask_like_dust3r(
+                    dm_orig, mask.shape, image_size, patch_size=16
+                )
+                if dm is not None and dm.shape == mask.shape:
+                    before_count = int(mask.sum())
+                    mask = mask & dm
+                    excluded = before_count - int(mask.sum())
+                    if excluded > 0:
+                        total_masked_points += excluded
 
         points = points[mask]
         colors = image[mask]
