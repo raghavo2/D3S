@@ -246,6 +246,9 @@ def reconstruct_point_cloud(
     all_points = np.concatenate(all_points, axis=0)
     all_colors = np.concatenate(all_colors, axis=0)
 
+    # Flip point cloud bottom-to-top (negate Z axis)
+    all_points[:, 2] *= 1
+
     if total_masked_points > 0:
         log(f"Excluded {total_masked_points} dynamic-object points")
     log(f"Total colored points: {len(all_points)}")

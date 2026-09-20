@@ -11,6 +11,7 @@ export default function Viewer() {
   const [searchParams, setSearchParams] = useSearchParams();
   const jobId = searchParams.get('job');
   const demoId = searchParams.get('demo');
+  const initialMode = searchParams.get('mode');
 
   const {
     getModelUrl, getPointCloudUrl,
@@ -20,11 +21,12 @@ export default function Viewer() {
     getJobGps,
   } = useApi();
 
-  const [viewMode, setViewMode] = useState('mesh');
+  const [viewMode, setViewMode] = useState(initialMode === 'pointcloud' ? 'pointcloud' : 'mesh');
   const [showGrid, setShowGrid] = useState(true);
   const [autoRotate, setAutoRotate] = useState(false);
   const [pointSize, setPointSize] = useState(0.02);
   const [darkBg, setDarkBg] = useState(true);
+  const [meshReady, setMeshReady] = useState(!initialMode); // assume ready unless we came from pointcloud mode
 
   // Demo gallery state
   const [demos, setDemos] = useState([]);
@@ -66,6 +68,25 @@ export default function Viewer() {
     return getDemoPointCloudUrlById('builtin');
   }, [jobId, activeDemo]);
 
+  // Check mesh availability for jobs (poll until ready)
+  useEffect(() => {
+    if (!jobId || activeDemo || meshReady) return;
+    let cancelled = false;
+    const checkMesh = async () => {
+      try {
+        const res = await fetch(`${modelUrl}`, { method: 'HEAD' });
+        if (res.ok) {
+          setMeshReady(true);
+          return;
+        }
+      } catch {}
+      // Retry in 5s if not cancelled
+      if (!cancelled) setTimeout(checkMesh, 5000);
+    };
+    checkMesh();
+    return () => { cancelled = true; };
+  }, [jobId, activeDemo, meshReady, modelUrl]);
+
   // Active item name
   const activeName = useMemo(() => {
     if (jobId && !activeDemo) return `Job ${jobId.slice(0, 8)}…`;
@@ -91,8 +112,10 @@ export default function Viewer() {
             <button
               className={`view-toggle-btn ${viewMode === 'mesh' ? 'active' : ''}`}
               onClick={() => setViewMode('mesh')}
+              disabled={!meshReady}
+              title={!meshReady ? 'Mesh is still generating...' : ''}
             >
-              🔺 Mesh
+              🔺 {!meshReady ? 'Mesh (generating...)' : 'Mesh'}
             </button>
             <button
               className={`view-toggle-btn ${viewMode === 'pointcloud' ? 'active' : ''}`}

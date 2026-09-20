@@ -262,6 +262,13 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
         emit("pipeline", status="failed", error=str(e))
         return
 
+    # ── Point cloud is ready — notify frontend for early preview ──
+    emit("pipeline", status="viewable", job_id=job_id)
+
+    # Stages 8 & 9 run in the background. Failures are non-fatal since
+    # the point cloud is already viewable.
+    post_viewable_ok = True
+
     # == Stage 8: Surface Meshing ==========================================
     emit("stage", stage="surface_meshing", status="running")
     try:
@@ -273,8 +280,7 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
     except Exception as e:
         emit("stage", stage="surface_meshing", status="error",
              error=str(e), traceback=traceback.format_exc())
-        emit("pipeline", status="failed", error=str(e))
-        return
+        post_viewable_ok = False
 
     # == Stage 9: Deliverable Export ========================================
     emit("stage", stage="deliverable_export", status="running")
@@ -287,10 +293,12 @@ def run_pipeline(job_id, video_path=None, images_dir=None, fps=2.0):
     except Exception as e:
         emit("stage", stage="deliverable_export", status="error",
              error=str(e), traceback=traceback.format_exc())
-        emit("pipeline", status="failed", error=str(e))
-        return
+        post_viewable_ok = False
 
-    emit("pipeline", status="complete", job_id=job_id)
+    if post_viewable_ok:
+        emit("pipeline", status="complete", job_id=job_id)
+    else:
+        emit("pipeline", status="complete_partial", job_id=job_id)
 
 
 if __name__ == "__main__":
