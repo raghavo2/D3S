@@ -1,0 +1,235 @@
+.dimensions-panel {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 20;
+  background: rgba(10, 10, 18, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  min-width: 220px;
+  max-width: 280px;
+  color: #e2e8f0;
+  font-size: 0.78rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+
+.dimensions-panel.collapsed {
+  min-width: 140px;
+}
+
+.dim-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.2s;
+}
+
+.dim-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dim-icon {
+  font-size: 1rem;
+}
+
+.dim-title {
+  font-weight: 600;
+  font-size: 0.82rem;
+  flex: 1;
+  letter-spacing: 0.02em;
+}
+
+.dim-toggle {
+  font-size: 0.6rem;
+  color: #64748b;
+  transition: transform 0.2s;
+}
+
+.dim-body {
+  padding: 10px 14px 14px;
+  animation: dimFadeIn 0.2s ease;
+}
+
+@keyframes dimFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Method indicator */
+.dim-method {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+
+.dim-method-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dim-method-dot.metric {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.dim-method-dot.relative {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.dim-method-label {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+/* Dimension grid */
+.dim-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dim-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.dim-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dim-row-volume {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dim-label {
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.dim-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+}
+
+/* Scale info */
+.dim-scale-info {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dim-residual {
+  color: #64748b;
+  font-size: 0.64rem;
+}
+
+/* Manual override */
+.dim-override {
+  margin-top: 8px;
+}
+
+.dim-override-btn {
+  width: 100%;
+  padding: 6px 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  color: #f59e0b;
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dim-override-btn:hover {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.dim-override-form {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dim-override-input {
+  flex: 1;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.dim-override-input:focus {
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.dim-override-input::placeholder {
+  color: #475569;
+}
+
+.dim-override-apply {
+  padding: 5px 10px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 6px;
+  color: #10b981;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dim-override-apply:hover {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.dim-override-cancel {
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.dim-override-cancel:hover {
+  color: #ef4444;
+}

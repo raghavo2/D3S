@@ -168,6 +168,10 @@ async def health():
 
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024  # 1 GB
 
+VIDEO_EXTENSIONS = (".mp4", ".avi", ".mov", ".mkv")
+BAG_EXTENSIONS = (".bag",)
+ALL_UPLOAD_EXTENSIONS = VIDEO_EXTENSIONS + BAG_EXTENSIONS
+
 
 @app.post("/api/upload")
 async def upload_video(
@@ -176,15 +180,29 @@ async def upload_video(
     gps_file: Optional[UploadFile] = File(default=None),
     flight_data_file: Optional[UploadFile] = File(default=None),
     telemetry_file: Optional[UploadFile] = File(default=None),
+    bag_file: Optional[UploadFile] = File(default=None),
 ):
-    """Upload a video file and create a new reconstruction job.
+    """Upload a video or ROS bag file and create a new reconstruction job.
     
-    Optionally attach GPS JSON, flight data CSV, or telemetry/SRT files
-    to provide geospatial data for the reconstruction pipeline.
+    The input type is auto-detected from file extension:
+      - .mp4, .avi, .mov, .mkv → video mode
+      - .bag → ROS bag mode (extracts frames + telemetry)
+    
+    Optionally attach GPS JSON, flight data CSV, telemetry/SRT files,
+    or a separate .bag file for telemetry-only extraction.
     """
-    # Validate file type
-    if not file.filename.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
-        raise HTTPException(400, "Unsupported file type. Use MP4, AVI, MOV, or MKV.")
+    file_ext = os.path.splitext(file.filename.lower())[1]
+    
+    # Auto-detect input type
+    if file_ext not in ALL_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            400,
+            f"Unsupported file type: {file_ext}. "
+            f"Use video ({', '.join(VIDEO_EXTENSIONS)}) or ROS bag ({', '.join(BAG_EXTENSIONS)})."
+        )
+    
+    is_bag_input = file_ext in BAG_EXTENSIONS
+    is_video_input = file_ext in VIDEO_EXTENSIONS
 
     job_id = str(uuid.uuid4())
     job_dir = os.path.join(JOBS_DIR, job_id)
@@ -192,18 +210,34 @@ async def upload_video(
     os.makedirs(job_dir, exist_ok=True)
     os.makedirs(metadata_dir, exist_ok=True)
 
-    # Save uploaded video
-    video_path = os.path.join(job_dir, "video.mp4")
+    # Save uploaded file
+    if is_video_input:
+        save_path = os.path.join(job_dir, "video.mp4")
+    else:
+        save_path = os.path.join(job_dir, "input.bag")
+    
     total_bytes = 0
-
-    with open(video_path, "wb") as f:
+    with open(save_path, "wb") as f:
         while chunk := await file.read(8192):
             total_bytes += len(chunk)
             if total_bytes > MAX_UPLOAD_BYTES:
                 f.close()
-                os.remove(video_path)
+                os.remove(save_path)
                 raise HTTPException(413, f"File exceeds {MAX_UPLOAD_BYTES // (1024*1024)}MB limit.")
             f.write(chunk)
+
+    video_path = save_path if is_video_input else None
+    bag_path = save_path if is_bag_input else None
+
+    # --- Save optional separate .bag file for telemetry ---
+    if bag_file and bag_file.filename and is_video_input:
+        bag_ext = os.path.splitext(bag_file.filename.lower())[1]
+        if bag_ext in BAG_EXTENSIONS:
+            bag_save_path = os.path.join(job_dir, "input.bag")
+            bag_data = await bag_file.read()
+            with open(bag_save_path, "wb") as f:
+                f.write(bag_data)
+            bag_path = bag_save_path
 
     # --- Save optional flight data files ---
     attached_files = []
@@ -312,6 +346,8 @@ async def upload_video(
         "stages": {},
         "created_at": datetime.now().isoformat(),
         "video_path": video_path,
+        "bag_path": bag_path,
+        "input_type": "bag" if is_bag_input else "video",
         "video_size_mb": round(total_bytes / (1024 * 1024), 2),
         "fps": fps,
         "logs": [],
@@ -335,6 +371,7 @@ async def upload_video(
     return {
         "job_id": job_id,
         "status": "uploaded",
+        "input_type": "bag" if is_bag_input else "video",
         "video_size_mb": jobs[job_id]["video_size_mb"],
         "attached_files": attached_files,
     }
@@ -459,6 +496,43 @@ async def get_job_metadata(job_id: str):
             result["telemetry"] = json.load(f)
 
     return result
+
+
+@app.get("/api/jobs/{job_id}/scale")
+async def get_job_scale(job_id: str):
+    """Return scale info (V3) for GPS-based metric scaling."""
+    scale_path = os.path.join(JOBS_DIR, job_id, "output", "scale_info.json")
+    if not os.path.isfile(scale_path):
+        return {"scale_factor": 1.0, "reliable": False, "method": "none"}
+    with open(scale_path, "r") as f:
+        return json.load(f)
+
+
+@app.post("/api/jobs/{job_id}/scale")
+async def set_job_scale(job_id: str, scale_factor: float = Form(...)):
+    """Manually override the scale factor for a job (V3).
+    
+    Useful when GPS is unavailable and the user knows the real-world
+    dimensions of a reference object in the scene.
+    """
+    output_dir = os.path.join(JOBS_DIR, job_id, "output")
+    scale_path = os.path.join(output_dir, "scale_info.json")
+    
+    # Load existing or create new
+    scale_info = {}
+    if os.path.isfile(scale_path):
+        with open(scale_path, "r") as f:
+            scale_info = json.load(f)
+    
+    scale_info["scale_factor"] = scale_factor
+    scale_info["reliable"] = True
+    scale_info["method"] = "manual_override"
+    
+    os.makedirs(output_dir, exist_ok=True)
+    with open(scale_path, "w") as f:
+        json.dump(scale_info, f, indent=2)
+    
+    return {"scale_factor": scale_factor, "method": "manual_override"}
 
 
 @app.get("/api/jobs/{job_id}/frames")
@@ -776,9 +850,14 @@ async def _run_pipeline_subprocess(job_id: str):
     cmd = [
         PIPELINE_PYTHON, pipeline_script,
         "--job-id", job_id,
-        "--video", job["video_path"],
         "--fps", str(job["fps"]),
     ]
+
+    # V3: Support both video and bag inputs
+    if job.get("video_path"):
+        cmd.extend(["--video", job["video_path"]])
+    if job.get("bag_path"):
+        cmd.extend(["--bag", job["bag_path"]])
 
     try:
         process = await asyncio.create_subprocess_exec(

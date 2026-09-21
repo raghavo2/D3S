@@ -2,6 +2,13 @@
 DUSt3R multi-view 3D reconstruction.
 Adapted from test_multiview.py — original script is preserved unchanged.
 
+V3 upgrades:
+  - Higher resolution (768) when GPU memory allows
+  - Denser scene graph (swin-5) for better connectivity
+  - Confidence-weighted point filtering
+  - More alignment iterations (500)
+  - GPS-based metric scale factor extraction (camera centers for scale.py)
+
 NOTE: This module has heavy imports (PyTorch, DUSt3R). They are lazily loaded
 inside the function so the server process can import this module without
 loading the model into memory.
@@ -80,31 +87,58 @@ def _resize_mask_like_dust3r(mask_bool, target_shape, image_size=512, patch_size
 
     return mask_cropped > 127
 
+
+def _auto_select_image_size(device, default=512, high=768):
+    """
+    Auto-select DUSt3R inference resolution based on available GPU memory.
+    Uses 768 if ≥8GB VRAM is available, otherwise falls back to 512.
+    """
+    try:
+        import torch
+        if device.type == "cuda":
+            total_mem = torch.cuda.get_device_properties(device).total_mem
+            free_mem = total_mem - torch.cuda.memory_allocated(device)
+            # 768 resolution needs ~6GB for inference; 8GB gives safe margin
+            if free_mem >= 8 * 1024 * 1024 * 1024:
+                return high
+    except Exception:
+        pass
+    return default
+
+
 def reconstruct_point_cloud(
     image_dir,
     output_ply,
     model_path=None,
     device=None,
-    image_size=512,
+    image_size=None,
     batch_size=1,
-    scene_graph="swin-3",
-    alignment_iters=300,
+    scene_graph=None,
+    alignment_iters=None,
     mask_dir=None,
     colmap_poses_json=None,
+    confidence_threshold=None,
     on_log=None,
 ):
     """
     Run DUSt3R multi-view stereo reconstruction on a folder of images.
+
+    V3 upgrades:
+      - Auto-selects higher resolution (768) when GPU memory allows
+      - Uses denser scene graph (swin-5) by default
+      - Confidence-based point filtering
+      - Extracts camera centers for GPS scale factor computation
+      - Returns camera_centers for pipeline.scale
 
     Args:
         image_dir: Directory containing input images (.jpg, .png).
         output_ply: Path for the output colored point cloud (.ply).
         model_path: Path to DUSt3R checkpoint. Auto-detected if None.
         device: 'cuda' or 'cpu'. Auto-detected if None.
-        image_size: Image resize target for inference (default 512).
+        image_size: Image resize target for inference. Auto-detected if None.
         batch_size: Inference batch size (default 1 for safe VRAM).
-        scene_graph: DUSt3R scene graph type (default 'swin-3').
-        alignment_iters: Global alignment iterations (default 300).
+        scene_graph: DUSt3R scene graph type. Default from config.
+        alignment_iters: Global alignment iterations. Default from config.
         mask_dir: Optional directory containing per-frame binary masks
                   (from pipeline.masking). Pixels marked as dynamic objects
                   are excluded from the output point cloud. DUSt3R still
@@ -113,13 +147,29 @@ def reconstruct_point_cloud(
                           (from pipeline.colmap). When available, COLMAP camera
                           poses are loaded for comparison and future pose-guided
                           reconstruction (Option B).
+        confidence_threshold: DUSt3R confidence threshold for point filtering.
+                             Points below this confidence are excluded.
+                             Default from config.
         on_log: Optional progress callback.
 
     Returns:
         dict with keys: point_count, output_ply, masked_points (if masks used),
-                        colmap_registered (if COLMAP poses available)
+                        colmap_registered (if COLMAP poses available),
+                        camera_centers (list of {filename, x, y, z}),
+                        dimensions (bounding box in reconstruction units)
     """
     log = on_log or (lambda msg: None)
+
+    from pipeline.config import ProjectConfig
+    config = ProjectConfig()
+
+    # --- Resolve defaults from config ---
+    if scene_graph is None:
+        scene_graph = config.DEFAULT_SCENE_GRAPH
+    if alignment_iters is None:
+        alignment_iters = config.DEFAULT_ALIGNMENT_ITERS
+    if confidence_threshold is None:
+        confidence_threshold = config.DEFAULT_CONFIDENCE_THRESHOLD
 
     # --- Resolve paths ---
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -180,6 +230,15 @@ def reconstruct_point_cloud(
     device = torch.device(device)
     log(f"Device: {device}")
 
+    # --- Auto-select image size (V3) ---
+    if image_size is None:
+        image_size = _auto_select_image_size(
+            device, config.DEFAULT_IMAGE_SIZE, config.DEFAULT_IMAGE_SIZE_HIGH
+        )
+    log(f"Inference resolution: {image_size}px")
+    log(f"Scene graph: {scene_graph}")
+    log(f"Alignment iterations: {alignment_iters}")
+
     # --- Discover images ---
     valid_ext = (".jpg", ".jpeg", ".png")
     image_paths = sorted(
@@ -220,11 +279,30 @@ def reconstruct_point_cloud(
     scene = global_aligner(
         output, device=device, mode=GlobalAlignerMode.PointCloudOptimizer
     )
-    log("Optimizing global scene…")
+    log(f"Optimizing global scene ({alignment_iters} iterations)…")
     scene.compute_global_alignment(
         init="mst", niter=alignment_iters, schedule="cosine", lr=0.01
     )
     log("Global alignment complete.")
+
+    # --- Extract camera centers for scale factor computation (V3) ---
+    camera_centers = []
+    try:
+        im_poses = scene.get_im_poses()
+        for idx, img_path in enumerate(image_paths):
+            fname = os.path.basename(img_path)
+            pose_mat = im_poses[idx].detach().cpu().numpy()
+            # Camera center = translation column of the pose matrix (4x4)
+            center = pose_mat[:3, 3]
+            camera_centers.append({
+                "filename": fname,
+                "x": float(center[0]),
+                "y": float(center[1]),
+                "z": float(center[2]),
+            })
+        log(f"Extracted {len(camera_centers)} camera centers for scale computation")
+    except Exception as e:
+        log(f"Warning: Could not extract camera centers: {e}")
 
     # --- Save COLMAP pose comparison data alongside output ---
     if colmap_data is not None:
@@ -234,7 +312,6 @@ def reconstruct_point_cloud(
         try:
             # Extract DUSt3R poses for comparison
             dust3r_poses = []
-            im_poses = scene.get_im_poses()
             for idx, img_path in enumerate(image_paths):
                 fname = os.path.basename(img_path)
                 pose_mat = im_poses[idx].detach().cpu().numpy()
@@ -261,6 +338,15 @@ def reconstruct_point_cloud(
     pts3d = scene.get_pts3d()
     masks = scene.get_masks()
 
+    # --- V3: Confidence-based filtering ---
+    confidences = None
+    try:
+        # DUSt3R provides confidence maps via get_conf()
+        confidences = scene.get_conf()
+        log(f"Confidence filtering enabled (threshold: {confidence_threshold})")
+    except (AttributeError, Exception):
+        log("Confidence maps not available — skipping confidence filtering")
+
     # Pre-load original-resolution masks for DUSt3R-aligned resizing
     # We must replicate DUSt3R's load_images resize logic on the mask:
     #   1. Resize long edge to image_size (preserving aspect ratio)
@@ -275,6 +361,7 @@ def reconstruct_point_cloud(
     all_points = []
     all_colors = []
     total_masked_points = 0
+    total_low_confidence = 0
 
     for i in range(len(pts3d)):
         points = pts3d[i].detach().cpu().numpy()
@@ -290,6 +377,16 @@ def reconstruct_point_cloud(
         if image.max() <= 1.0:
             image = image * 255.0
         image = np.clip(image, 0, 255).astype(np.uint8)
+
+        # V3: Apply confidence threshold
+        if confidences is not None:
+            conf_map = confidences[i].detach().cpu().numpy()
+            low_conf_mask = conf_map < confidence_threshold
+            count_before = int(mask.sum())
+            mask = mask & (~low_conf_mask)
+            excluded = count_before - int(mask.sum())
+            if excluded > 0:
+                total_low_confidence += excluded
 
         # Apply dynamic object mask — resize to match DUSt3R's ACTUAL shape
         if mask_load_fn is not None and i < len(image_paths):
@@ -325,7 +422,17 @@ def reconstruct_point_cloud(
 
     if total_masked_points > 0:
         log(f"Excluded {total_masked_points} dynamic-object points")
+    if total_low_confidence > 0:
+        log(f"Excluded {total_low_confidence} low-confidence points")
     log(f"Total colored points: {len(all_points)}")
+
+    # --- Compute bounding box dimensions (V3) ---
+    from pipeline.scale import compute_dimensions_from_points
+    dimensions = compute_dimensions_from_points(all_points, scale_factor=1.0)
+    log(
+        f"Bounding box (reconstruction units): "
+        f"{dimensions['width_m']:.2f} × {dimensions['height_m']:.2f} × {dimensions['depth_m']:.2f}"
+    )
 
     # --- Export PLY ---
     os.makedirs(os.path.dirname(output_ply) or ".", exist_ok=True)
@@ -342,6 +449,9 @@ def reconstruct_point_cloud(
         "point_count": len(all_points),
         "output_ply": output_ply,
         "masked_points": total_masked_points,
+        "low_confidence_points": total_low_confidence,
+        "camera_centers": camera_centers,
+        "dimensions_raw": dimensions,
     }
     if colmap_data is not None:
         result["colmap_registered"] = colmap_data.get("registered_images", 0)

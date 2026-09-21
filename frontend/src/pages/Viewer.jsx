@@ -4,6 +4,8 @@ import ModelViewer from '../components/ModelViewer';
 import PointCloudViewer from '../components/PointCloudViewer';
 import ExportPanel from '../components/ExportPanel';
 import FlightMap from '../components/FlightMap';
+import DimensionsPanel from '../components/DimensionsPanel';
+import { useMeasurementTool, MeasurementHUD } from '../components/MeasurementTool';
 import { useApi } from '../hooks/useApi';
 import './Viewer.css';
 
@@ -19,6 +21,8 @@ export default function Viewer() {
     getDemoPointCloudUrlById,
     listDemos,
     getJobGps,
+    getJobScale,
+    setJobScale,
   } = useApi();
 
   const [viewMode, setViewMode] = useState(initialMode === 'pointcloud' ? 'pointcloud' : 'mesh');
@@ -34,6 +38,15 @@ export default function Viewer() {
   const [activeDemo, setActiveDemo] = useState(demoId || (jobId ? null : 'builtin'));
   const [gpsData, setGpsData] = useState(null);
   const [showMap, setShowMap] = useState(false);
+
+  // V3: Scale and dimensions state
+  const [scaleInfo, setScaleInfo] = useState(null);
+  const [boundingBox, setBoundingBox] = useState(null);
+  const [showBoundingBox, setShowBoundingBox] = useState(false);
+  const [showDimensions, setShowDimensions] = useState(true);
+
+  // V3: Measurement tool
+  const measurement = useMeasurementTool();
 
   // Fetch demos list
   useEffect(() => {
@@ -52,6 +65,19 @@ export default function Viewer() {
         .catch(() => {});
     } else {
       setGpsData(null);
+    }
+  }, [jobId, activeDemo]);
+
+  // V3: Fetch scale info for active job
+  useEffect(() => {
+    if (jobId && !activeDemo) {
+      getJobScale(jobId)
+        .then(data => {
+          if (data) setScaleInfo(data);
+        })
+        .catch(() => {});
+    } else {
+      setScaleInfo(null);
     }
   }, [jobId, activeDemo]);
 
@@ -98,6 +124,29 @@ export default function Viewer() {
     setActiveDemo(id);
     setSearchParams({ demo: id });
     setGalleryOpen(false);
+    setScaleInfo(null);
+    setBoundingBox(null);
+  };
+
+  // V3: Scale factor derived values
+  const scaleFactor = scaleInfo?.scale_factor || 1.0;
+  const isMetric = scaleInfo?.reliable || scaleInfo?.method === 'manual_override';
+
+  // V3: Handle manual scale override
+  const handleScaleOverride = async (newScale) => {
+    if (jobId && !activeDemo) {
+      try {
+        const result = await setJobScale(jobId, newScale);
+        setScaleInfo(prev => ({
+          ...prev,
+          scale_factor: newScale,
+          reliable: true,
+          method: 'manual_override',
+        }));
+      } catch (err) {
+        console.error('Failed to set scale:', err);
+      }
+    }
   };
 
   return (
@@ -201,12 +250,27 @@ export default function Viewer() {
               showGrid={showGrid}
               autoRotate={autoRotate}
               bgColor={darkBg ? '#06060a' : '#f0f0f0'}
+              showBoundingBox={showBoundingBox}
+              scaleFactor={scaleFactor}
+              isMetric={isMetric}
+              onBoundingBox={setBoundingBox}
+              measuring={measurement.measuring}
+              measurements={measurement.measurements}
+              pendingPoint={measurement.pendingPoint}
+              onSurfaceClick={measurement.addPoint}
             />
           ) : (
             <PointCloudViewer
               url={pointCloudUrl}
               pointSize={pointSize}
               bgColor={darkBg ? '#06060a' : '#f0f0f0'}
+              showBoundingBox={showBoundingBox}
+              scaleFactor={scaleFactor}
+              isMetric={isMetric}
+              onBoundingBox={setBoundingBox}
+              measuring={measurement.measuring}
+              measurements={measurement.measurements}
+              pendingPoint={measurement.pendingPoint}
             />
           )}
 
@@ -252,6 +316,21 @@ export default function Viewer() {
             >
               {darkBg ? '☀️' : '🌙'}
             </button>
+            <button
+              className={`viewer-control-btn ${showBoundingBox ? 'active' : ''}`}
+              onClick={() => setShowBoundingBox(!showBoundingBox)}
+              title="Toggle Bounding Box"
+            >
+              ⬜
+            </button>
+            <button
+              className={`viewer-control-btn ${measurement.measuring ? 'active' : ''}`}
+              onClick={measurement.toggleMeasuring}
+              title={measurement.measuring ? 'Stop Measuring' : 'Measure Distance'}
+              style={measurement.measuring ? { background: 'rgba(16,185,129,0.25)', borderColor: 'rgba(16,185,129,0.5)' } : {}}
+            >
+              📏
+            </button>
             {gpsData && (
               <button
                 className={`viewer-control-btn ${showMap ? 'active' : ''}`}
@@ -279,6 +358,28 @@ export default function Viewer() {
             </div>
           )}
 
+          {/* V3: Dimensions Panel */}
+          {showDimensions && (
+            <DimensionsPanel
+              scaleInfo={scaleInfo}
+              boundingBox={boundingBox}
+              onScaleOverride={handleScaleOverride}
+              visible={!!boundingBox}
+            />
+          )}
+
+          {/* V3: Measurement HUD */}
+          <MeasurementHUD
+            measurements={measurement.measurements}
+            measuring={measurement.measuring}
+            pendingPoint={measurement.pendingPoint}
+            scaleFactor={scaleFactor}
+            isMetric={isMetric}
+            onClear={measurement.clearMeasurements}
+            onRemoveLast={measurement.removeLast}
+            onToggle={measurement.toggleMeasuring}
+          />
+
           {/* Info Panel */}
           <div className="viewer-info">
             <div className="viewer-info-row">
@@ -290,6 +391,14 @@ export default function Viewer() {
             <div className="viewer-info-row">
               <span className="viewer-info-label">Source</span>
               <span className="viewer-info-value">{activeName}</span>
+            </div>
+            <div className="viewer-info-row">
+              <span className="viewer-info-label">Scale</span>
+              <span className="viewer-info-value" style={{ fontSize: '0.7rem' }}>
+                {isMetric
+                  ? `${scaleFactor.toFixed(4)}× (GPS)`
+                  : 'Relative'}
+              </span>
             </div>
             <div className="viewer-info-row">
               <span className="viewer-info-label">Controls</span>
