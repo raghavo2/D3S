@@ -27,6 +27,7 @@ export function useApi() {
     if (extraFiles.gpsFile) formData.append('gps_file', extraFiles.gpsFile);
     if (extraFiles.flightDataFile) formData.append('flight_data_file', extraFiles.flightDataFile);
     if (extraFiles.telemetryFile) formData.append('telemetry_file', extraFiles.telemetryFile);
+    if (extraFiles.bagFile) formData.append('bag_file', extraFiles.bagFile);
 
     const xhr = new XMLHttpRequest();
     return new Promise((resolve, reject) => {
@@ -109,6 +110,16 @@ export function useApi() {
   /** Get job output files */
   const getJobOutputs = (jobId) => request(`/api/jobs/${jobId}/outputs`);
 
+  /** Get scale info for a job (V3) */
+  const getJobScale = (jobId) => request(`/api/jobs/${jobId}/scale`);
+
+  /** Set manual scale override for a job (V3) */
+  const setJobScale = (jobId, scaleFactor) => {
+    const formData = new FormData();
+    formData.append('scale_factor', scaleFactor.toString());
+    return request(`/api/jobs/${jobId}/scale`, { method: 'POST', body: formData });
+  };
+
   return {
     request,
     getHealth,
@@ -121,6 +132,8 @@ export function useApi() {
     getJobGps,
     deleteJob,
     getJobOutputs,
+    getJobScale,
+    setJobScale,
     getModelUrl,
     getPointCloudUrl,
     getDemoModelUrl,

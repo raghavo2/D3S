@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { SUPPORTED_FORMATS, MAX_UPLOAD_SIZE, FPS_MIN, FPS_MAX, FPS_DEFAULT } from '../utils/constants';
+import { SUPPORTED_FORMATS, SUPPORTED_BAG_FORMATS, MAX_UPLOAD_SIZE, FPS_MIN, FPS_MAX, FPS_DEFAULT } from '../utils/constants';
 import './Upload.css';
 
 const FORMAT_TABS = [
@@ -55,6 +55,7 @@ export default function Upload() {
 
   const [file, setFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
+  const [inputType, setInputType] = useState(null); // 'video' or 'bag'
   const [fps, setFps] = useState(FPS_DEFAULT);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -65,8 +66,10 @@ export default function Upload() {
   const [gpsFile, setGpsFile] = useState(null);
   const [flightDataFile, setFlightDataFile] = useState(null);
   const [telemetryFile, setTelemetryFile] = useState(null);
+  const [bagFile, setBagFile] = useState(null);
   const gpsInputRef = useRef(null);
   const flightDataInputRef = useRef(null);
+  const bagInputRef = useRef(null);
   const telemetryInputRef = useRef(null);
 
   // Format guide
@@ -90,7 +93,17 @@ export default function Upload() {
     setError(null);
     if (!validateFile(f)) return;
     setFile(f);
-    setVideoUrl(URL.createObjectURL(f));
+
+    // Auto-detect input type
+    const ext = '.' + f.name.split('.').pop().toLowerCase();
+    const isBag = SUPPORTED_BAG_FORMATS.includes(ext);
+    setInputType(isBag ? 'bag' : 'video');
+
+    if (!isBag) {
+      setVideoUrl(URL.createObjectURL(f));
+    } else {
+      setVideoUrl(null);
+    }
   };
 
   const handleDrop = useCallback((e) => {
@@ -113,6 +126,7 @@ export default function Upload() {
     setFile(null);
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
+    setInputType(null);
     setError(null);
   };
 
@@ -123,8 +137,8 @@ export default function Upload() {
     setProgress(0);
 
     try {
-      // 1. Upload video + optional flight data
-      const extraFiles = { gpsFile, flightDataFile, telemetryFile };
+      // 1. Upload file + optional flight data
+      const extraFiles = { gpsFile, flightDataFile, telemetryFile, bagFile };
       const result = await uploadVideo(file, fps, (pct) => setProgress(pct), extraFiles);
 
       // 2. Auto-start the pipeline
@@ -144,14 +158,14 @@ export default function Upload() {
   };
 
   const activeFormat = FORMAT_TABS.find(t => t.id === activeFormatTab);
-  const attachCount = [gpsFile, flightDataFile, telemetryFile].filter(Boolean).length;
+  const attachCount = [gpsFile, flightDataFile, telemetryFile, bagFile].filter(Boolean).length;
 
   return (
     <div className="upload-page page">
       <div className="upload-container animate-fade-in">
         <div className="upload-header">
-          <h1 className="gradient-text">Upload Video</h1>
-          <p>Drop your drone flight video to begin 3D reconstruction</p>
+          <h1 className="gradient-text">Upload Input</h1>
+          <p>Drop your drone flight video or ROS bag file to begin 3D reconstruction</p>
         </div>
 
         <div className="upload-columns">
@@ -168,26 +182,53 @@ export default function Upload() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".mp4,.avi,.mov,.mkv"
+                accept=".mp4,.avi,.mov,.mkv,.bag"
                 onChange={(e) => e.target.files[0] && handleFileSelect(e.target.files[0])}
               />
               {!file ? (
                 <>
                   <span className="drop-zone-icon">↑</span>
-                  <p className="drop-zone-text">Drop video here or click to browse</p>
+                  <p className="drop-zone-text">Drop video or ROS bag here</p>
                   <p className="drop-zone-hint">
-                    Supports {SUPPORTED_FORMATS.join(', ')} • Max {MAX_UPLOAD_SIZE / (1024 * 1024 * 1024)}GB
+                    Video: {'.mp4, .avi, .mov, .mkv'} • ROS bag: {'.bag'} • Max {MAX_UPLOAD_SIZE / (1024 * 1024 * 1024)}GB
                   </p>
                 </>
               ) : (
-                <p className="drop-zone-ready">✓ Video ready — {file.name}</p>
+                <p className="drop-zone-ready">
+                  ✓ {inputType === 'bag' ? 'ROS Bag' : 'Video'} ready — {file.name}
+                </p>
               )}
             </div>
 
             {/* Video Preview */}
-            {file && videoUrl && (
+            {file && videoUrl && inputType === 'video' && (
               <div className="video-preview animate-fade-in">
                 <video src={videoUrl} controls muted />
+                <div className="video-info">
+                  <span className="video-name">{file.name}</span>
+                  <span className="video-size">{formatSize(file.size)}</span>
+                  <button className="video-remove" onClick={removeFile}>Remove</button>
+                </div>
+              </div>
+            )}
+
+            {/* ROS Bag Preview */}
+            {file && inputType === 'bag' && (
+              <div className="video-preview animate-fade-in" style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                borderRadius: '12px',
+                padding: '20px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '2rem' }}>📡</span>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>ROS Bag File</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Frames and GPS/IMU telemetry will be extracted automatically
+                    </div>
+                  </div>
+                </div>
                 <div className="video-info">
                   <span className="video-name">{file.name}</span>
                   <span className="video-size">{formatSize(file.size)}</span>
@@ -284,6 +325,28 @@ export default function Upload() {
                   <button className="btn btn-ghost attachment-btn" onClick={() => telemetryInputRef.current?.click()}>+ Attach</button>
                 )}
               </div>
+
+              {/* ROS Bag (optional alongside video) */}
+              {inputType !== 'bag' && (
+                <div className="attachment-row">
+                  <div className="attachment-info">
+                    <div className="attachment-details">
+                      <span className="attachment-label">ROS Bag</span>
+                      <span className="attachment-hint">.bag (GPS + IMU telemetry)</span>
+                    </div>
+                  </div>
+                  <input ref={bagInputRef} type="file" accept=".bag" style={{ display: 'none' }}
+                    onChange={(e) => e.target.files[0] && setBagFile(e.target.files[0])} />
+                  {bagFile ? (
+                    <div className="attachment-selected">
+                      <span className="attachment-filename">{bagFile.name}</span>
+                      <button className="attachment-remove" onClick={() => { setBagFile(null); bagInputRef.current.value = ''; }}>✕</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn-ghost attachment-btn" onClick={() => bagInputRef.current?.click()}>+ Attach</button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Upload Progress */}

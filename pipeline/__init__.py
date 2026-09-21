@@ -5,12 +5,32 @@ Modularized 3D reconstruction pipeline for drone video processing.
 Each module wraps an existing standalone script as an importable function
 with configurable paths and progress callbacks.
 
+V3: Added ROS bag full telemetry extraction, GPS-based metric scaling,
+and frame extraction from bag image topics.
+
 Original standalone scripts are preserved unchanged for backward compatibility.
 """
 
 from pipeline.config import ProjectConfig
 from pipeline.frames import extract_frames
-from pipeline.metadata import extract_gps_from_images, extract_telemetry_from_bag
+from pipeline.quality import score_all_frames, filter_frames
+from pipeline.keyframes import select_keyframes, copy_keyframes
+from pipeline.detection import detect_objects, save_detections
+from pipeline.masking import generate_masks
+from pipeline.colmap import run_colmap
+from pipeline.metadata import (
+    extract_gps_from_images,
+    extract_telemetry_from_bag,
+    extract_full_telemetry_from_bag,
+    extract_frames_from_bag,
+    interpolate_gps_for_frames,
+)
+from pipeline.scale import (
+    compute_scale_factor,
+    apply_scale_to_point_cloud,
+    save_scale_info,
+    compute_dimensions_from_points,
+)
 from pipeline.reconstruct import reconstruct_point_cloud
 from pipeline.mesh import generate_mesh
 from pipeline.export import export_deliverables
@@ -18,8 +38,23 @@ from pipeline.export import export_deliverables
 __all__ = [
     "ProjectConfig",
     "extract_frames",
+    "score_all_frames",
+    "filter_frames",
+    "select_keyframes",
+    "copy_keyframes",
+    "detect_objects",
+    "save_detections",
+    "generate_masks",
+    "run_colmap",
     "extract_gps_from_images",
     "extract_telemetry_from_bag",
+    "extract_full_telemetry_from_bag",
+    "extract_frames_from_bag",
+    "interpolate_gps_for_frames",
+    "compute_scale_factor",
+    "apply_scale_to_point_cloud",
+    "save_scale_info",
+    "compute_dimensions_from_points",
     "reconstruct_point_cloud",
     "generate_mesh",
     "export_deliverables",
